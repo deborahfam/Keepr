@@ -1,10 +1,13 @@
 <resources>
     <string name="app_name">Keepr</string>
-    <string name="save_link">+ Save a link</string>
-    <string name="open_link">Open link</string>
+    <string name="save_link">Save a new find</string>
+    <string name="open_link">Open original ↗</string>
     <string name="delete_link">Delete</string>
     <plurals name="saved_count"><item quantity="one">%d SAVED FIND</item><item quantity="other">%d SAVED FINDS</item></plurals>
     <string name="fetch_preview">Fetch preview</string>
     <string name="fetching_preview">Fetching preview…</string>
     <string name="preview_error">%1$s. You can still save this link.</string>
+    <string name="search_finds">Search your finds</string>
+    <string name="all_finds">All finds</string>
+    <string name="item_options">Options for %1$s</string>
 </resources>
