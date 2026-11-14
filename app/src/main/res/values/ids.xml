@@ -1,0 +1,10 @@
+<resources>
+    <item name="gallery_counter" type="id" />
+    <item name="next_photo" type="id" />
+    <item name="previous_photo" type="id" />
+    <item name="detail_photo" type="id" />
+    <item name="detail_tab_post" type="id" />
+    <item name="detail_tab_photos" type="id" />
+    <item name="detail_tab_info" type="id" />
+    <item name="zoom_photo_view" type="id" />
+</resources>

@@ -22,6 +22,10 @@ import com.keepr.app.data.SQLiteSavedItemRepository;
 import com.keepr.app.data.UrlExtractor;
 import com.keepr.app.data.MetadataService;
 import com.keepr.app.data.PreviewMetadata;
+import com.keepr.app.data.MediaCache;
+import com.keepr.app.data.SnapshotWorker;
+import com.keepr.app.domain.CachedMedia;
+import com.keepr.app.domain.TagNames;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -34,7 +38,9 @@ public final class MainActivity extends Activity {
     private LinearLayout cards;
     private TextView count;
     private AlertDialog editor;
-    private EditText editorUrl, editorTitle, editorNotes;
+    private EditText editorUrl, editorTitle, editorNotes, editorText, editorTags;
+    private String editorSharedText = "";
+    private ArrayList<Uri> editorAttachments = new ArrayList<>();
     private Spinner editorCategory;
     private String category = "All", query = "";
     private boolean storageHealthy = false;
@@ -43,6 +49,11 @@ public final class MainActivity extends Activity {
     private final int accent = Color.rgb(102, 72, 202);
     private final int canvas = Color.rgb(248, 246, 242);
     private final int line = Color.rgb(228, 223, 235);
+    private final List<String> folders = new ArrayList<>(java.util.Arrays.asList(CATEGORIES));
+    private LinearLayout folderChips;
+    private final ExecutorService imageWorker = Executors.newFixedThreadPool(2);
+    private androidx.lifecycle.Observer<List<androidx.work.WorkInfo>> workObserver;
+    private androidx.lifecycle.LiveData<List<androidx.work.WorkInfo>> workUpdates;
     private final List<Button> categoryButtons = new ArrayList<>();
 
     @Override public void onCreate(Bundle state) {
@@ -55,7 +66,19 @@ public final class MainActivity extends Activity {
                     if (!isDestroyed()) { links.clear(); links.addAll(snapshot); renderCards(); }
                 }));
                 List<SavedItem> loaded = store.load();
-                runOnUiThread(() -> { if (!isDestroyed()) { storageHealthy = true; links.clear(); links.addAll(loaded); renderCards(); } });
+                List<String> savedFolders = store.folders();
+                for (SavedItem item : loaded) if (!item.url().isEmpty() && (item.previewState() == SavedItem.PreviewState.PENDING || store.needsPhotoDiscovery(item.id()))) SnapshotWorker.enqueue(this,item.id());
+                runOnUiThread(() -> { if (!isDestroyed()) {
+                    storageHealthy = true; links.clear(); links.addAll(loaded);
+                    String selectedFolder=editorCategory==null || editorCategory.getSelectedItem()==null ? null : editorCategory.getSelectedItem().toString();
+                    folders.clear(); folders.addAll(savedFolders);
+                    if (selectedFolder!=null) {
+                        if (!folders.contains(selectedFolder)) folders.add(selectedFolder);
+                        ((ArrayAdapter<?>)editorCategory.getAdapter()).notifyDataSetChanged();
+                        editorCategory.setSelection(folders.indexOf(selectedFolder));
+                    }
+                    rebuildFolderChips(); renderCards();
+                } });
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     storageHealthy = false;
@@ -66,11 +89,29 @@ public final class MainActivity extends Activity {
             }
         });
         if (state != null && state.getBoolean("editor_open")) {
-            showEditor(state.getString("draft_url", ""));
+            ArrayList<String> savedUris = state.getStringArrayList("draft_attachments");
+            ArrayList<Uri> attachments = new ArrayList<>();
+            if (savedUris != null) for (String value : savedUris) attachments.add(Uri.parse(value));
+            showEditor(state.getString("draft_url", ""),state.getString("shared_text", ""),attachments,false);
             editorTitle.setText(state.getString("draft_title", ""));
             editorNotes.setText(state.getString("draft_notes", ""));
-            editorCategory.setSelection(state.getInt("draft_category", 0));
+            editorText.setText(state.getString("draft_text", "")); editorTags.setText(state.getString("draft_tags", ""));
+            String folder = state.getString("draft_folder", "Other");
+            if (!folders.contains(folder)) folders.add(folder);
+            ((ArrayAdapter<?>)editorCategory.getAdapter()).notifyDataSetChanged();
+            editorCategory.setSelection(folders.indexOf(folder));
         } else if (state == null) receiveShare(getIntent());
+        workObserver = infos -> {
+            if (isDestroyed() || !storageHealthy) return;
+            databaseWorker.execute(() -> {
+                try {
+                    List<SavedItem> refreshed = store.load();
+                    runOnUiThread(() -> { if (!isDestroyed()) { links.clear(); links.addAll(refreshed); renderCards(); } });
+                } catch (Exception ignored) { }
+            });
+        };
+        workUpdates=androidx.work.WorkManager.getInstance(this).getWorkInfosByTagLiveData("keepr-snapshot");
+        workUpdates.observeForever(workObserver);
     }
 
     private void buildScreen() {
@@ -134,17 +175,8 @@ public final class MainActivity extends Activity {
         });
         HorizontalScrollView filters = new HorizontalScrollView(this); filters.setHorizontalScrollBarEnabled(false);
         filters.setPadding(0, dp(12), 0, dp(14));
-        LinearLayout chips = new LinearLayout(this);
-        categoryButtons.clear();
-        List<String> options = new ArrayList<>(); options.add("All"); java.util.Collections.addAll(options, CATEGORIES);
-        for (String option : options) {
-            Button chip = button(option.equals("All") ? getString(R.string.all_finds) : option, false);
-            chip.setTag(option); chip.setTextSize(13); chip.setMinHeight(dp(48));
-            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(48)); cp.rightMargin = dp(8);
-            chips.addView(chip, cp); categoryButtons.add(chip);
-            chip.setOnClickListener(v -> { category = option; updateFilters(); renderCards(); });
-        }
-        filters.addView(chips); content.addView(filters); updateFilters();
+        folderChips = new LinearLayout(this);
+        filters.addView(folderChips); content.addView(filters); rebuildFolderChips();
         cards = column(); content.addView(cards);
 
         LinearLayout dock = column(); dock.setPadding(dp(24), dp(10), dp(24), dp(12));
@@ -154,6 +186,20 @@ public final class MainActivity extends Activity {
         add.setCompoundDrawablePadding(dp(10));
         add.setOnClickListener(v -> showEditor("")); dock.addView(add, new LinearLayout.LayoutParams(-1, dp(56)));
         root.addView(dock); setContentView(root); renderCards();
+    }
+
+    private void rebuildFolderChips() {
+        if (folderChips == null) return;
+        folderChips.removeAllViews(); categoryButtons.clear();
+        List<String> options = new ArrayList<>(); options.add("All"); options.addAll(folders);
+        for (String option : options) {
+            Button chip = button(option.equals("All") ? getString(R.string.all_finds) : option, false);
+            chip.setTag(option); chip.setTextSize(13); chip.setMinHeight(dp(48));
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(48)); cp.rightMargin = dp(8);
+            folderChips.addView(chip, cp); categoryButtons.add(chip);
+            chip.setOnClickListener(v -> { category = option; updateFilters(); renderCards(); });
+        }
+        updateFilters();
     }
 
     private void updateFilters() {
@@ -169,7 +215,7 @@ public final class MainActivity extends Activity {
         if (cards == null) return;
         cards.removeAllViews(); int shown = 0;
         for (SavedItem link : links) {
-            String searchable = (link.title() + " " + link.url() + " " + link.notes() + " " + link.description()).toLowerCase(Locale.ROOT);
+            String searchable = (link.title() + " " + link.url() + " " + link.notes() + " " + link.description() + " " + link.sharedText() + " " + String.join(" ",link.tags())).toLowerCase(Locale.ROOT);
             if ((!category.equals("All") && !category.equals(link.categoryId())) || !searchable.contains(query.toLowerCase(Locale.ROOT))) continue;
             shown++;
             String itemCategory = link.categoryId() == null ? "Other" : link.categoryId();
@@ -189,7 +235,7 @@ public final class MainActivity extends Activity {
             TextView categoryLabel = label(itemCategory, 12, categoryColor); categoryLabel.setTypeface(null, Typeface.BOLD);
             categoryLabel.setPadding(0, 0, 0, dp(3)); source.addView(categoryLabel);
             String host = Uri.parse(link.url()).getHost();
-            TextView domain = label(host == null ? link.url() : host.replaceFirst("^www\\.", ""), 12, muted);
+            TextView domain = label(host == null ? "Shared post" : host.replaceFirst("^www\\.", ""), 12, muted);
             domain.setPadding(0, 0, 0, 0); domain.setSingleLine(true);
             domain.setEllipsize(android.text.TextUtils.TruncateAt.END); source.addView(domain);
             LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, -2, 1); sp.leftMargin = dp(10);
@@ -203,12 +249,23 @@ public final class MainActivity extends Activity {
                 menu.show();
             });
             card.addView(meta);
+            if (!link.media().isEmpty()) {
+                ImageView photo = photo(link.media().get(0), 190);
+                LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1,dp(190)); pp.topMargin = dp(14);
+                card.addView(photo,pp); photo.setOnClickListener(v -> showSavedPost(link));
+                photo.setContentDescription(getString(R.string.view_saved_photos, link.media().size()));
+                card.addView(label(getString(R.string.photos_saved_count,link.media().size()),12,accent));
+            }
             TextView title = label(link.title(), 21, ink); title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
             title.setPadding(0, dp(14), 0, dp(6)); card.addView(title);
-            if (!link.description().isEmpty()) {
-                TextView description = label(link.description(), 14, muted); description.setLineSpacing(dp(3), 1);
-                card.addView(description);
+            String caption = !link.description().isEmpty() ? link.description() : link.sharedText();
+            if (!caption.isEmpty()) {
+                TextView description = label(caption, 14, muted); description.setLineSpacing(dp(3), 1);
+                description.setMaxLines(4); description.setEllipsize(android.text.TextUtils.TruncateAt.END); card.addView(description);
             }
+            if (!link.tags().isEmpty()) card.addView(label("#" + String.join("  #",link.tags()),12,accent));
+            if (link.previewState() == SavedItem.PreviewState.PENDING) card.addView(label("Saved · fetching available text and photos…",12,muted));
+            else if (link.media().isEmpty()) card.addView(label("Saved locally · no photos available",12,muted));
             if (!link.notes().isEmpty()) {
                 TextView notes = label(link.notes(), 14, ink); notes.setPadding(dp(12), dp(10), dp(12), dp(10));
                 notes.setBackground(surface(canvas, 10, 0)); card.addView(notes);
@@ -223,8 +280,8 @@ public final class MainActivity extends Activity {
                 TextView state = label("•  " + status.substring(0, 1).toUpperCase(Locale.ROOT) + status.substring(1), 12, muted);
                 footer.addView(state, new LinearLayout.LayoutParams(0, -2, 1));
             }
-            Button open = button(getString(R.string.open_link), false);
-            open.setOnClickListener(v -> openLink(link.url()));
+            Button open = button(getString(R.string.view_saved_post), false);
+            open.setOnClickListener(v -> showSavedPost(link));
             LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(-2, dp(48)); op.leftMargin = dp(10);
             footer.addView(open, op); card.addView(footer);
         }
@@ -249,6 +306,7 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Delete saved link?").setMessage(link.title())
             .setNegativeButton("Cancel", null).setPositiveButton("Delete", (d, which) -> {
                 if (!storageHealthy) return;
+                androidx.work.WorkManager.getInstance(this).cancelUniqueWork("snapshot-"+link.id());
                 databaseWorker.execute(() -> {
                     try { store.delete(link.id()); }
                     catch (Exception e) { runOnUiThread(() -> Toast.makeText(this, "Could not delete link", Toast.LENGTH_LONG).show()); }
@@ -256,79 +314,138 @@ public final class MainActivity extends Activity {
             }).show();
     }
 
-    private void showEditor(String sharedUrl) {
+    private void showEditor(String sharedUrl) { showEditor(sharedUrl,"",new ArrayList<>(),false); }
+
+    private void showEditor(String sharedUrl, String sharedText, ArrayList<Uri> attachments, boolean automatic) {
         if (editor != null) editor.dismiss();
+        editorSharedText = sharedText; editorAttachments = new ArrayList<>(attachments);
         LinearLayout form = column(); form.setPadding(dp(24), dp(8), dp(24), dp(16));
-        form.addView(label("A good find deserves a place to stay.", 14, muted));
-        EditText url = field(form, "Link (https://…)"); url.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI); url.setText(sharedUrl);
-        EditText title = field(form, "Title (optional)");
+        form.addView(label("Choose a folder and tags. Available text and photos stay on your device.",14,muted));
+        EditText url = field(form,"Original link (optional for a shared photo)");
+        url.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI); url.setText(sharedUrl);
+        EditText title = field(form,"Title (optional)");
+        form.addView(label("FOLDER",11,muted));
+        Spinner categories = new Spinner(this);
+        ArrayAdapter<String> folderAdapter = new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,folders);
+        categories.setAdapter(folderAdapter); categories.setContentDescription("Folder");
+        categories.setBackground(surface(canvas,12,line)); form.addView(categories,new LinearLayout.LayoutParams(-1,dp(52)));
+        categories.setSelection(Math.max(0,folders.indexOf(category.equals("All") ? "Other" : category)));
+        Button newFolder = button(getString(R.string.new_folder),false); form.addView(newFolder,new LinearLayout.LayoutParams(-1,dp(48)));
+        newFolder.setOnClickListener(v -> {
+            EditText name = new EditText(this); name.setHint(R.string.folder_name); name.setSingleLine(true);
+            AlertDialog create = new AlertDialog.Builder(this).setTitle(R.string.new_folder).setView(name)
+                    .setNegativeButton("Cancel",null).setPositiveButton("Create",null).create();
+            create.setOnShowListener(d -> create.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+                String value = name.getText().toString().trim();
+                if (value.isEmpty() || value.length() > 60 || value.equalsIgnoreCase("All")) { name.setError("Use a folder name from 1 to 60 characters, other than All."); return; }
+                int selected = -1;
+                for (int i=0;i<folders.size();i++) if (folders.get(i).equalsIgnoreCase(value)) selected=i;
+                if (selected < 0) { folders.add(value); selected=folders.size()-1; }
+                folderAdapter.notifyDataSetChanged(); categories.setSelection(selected); create.dismiss();
+            })); create.show();
+        });
+        EditText tags = field(form,"Tags (comma separated, e.g. apartment, wishlist)");
+        EditText text = field(form,"Post text / caption"); text.setSingleLine(false); text.setMinLines(3);
+        text.setText(sharedText);
+        if (!attachments.isEmpty()) form.addView(label(attachments.size()+" shared photo(s) will be copied for offline viewing.",13,accent));
         PreviewMetadata[] preview = {null};
-        String[] previewUrl = {""}, previewError = {""};
-        TextView previewStatus = label("Preview is optional. You can always save the link offline.", 13, muted);
-        form.addView(previewStatus);
-        Button fetch = button(getString(R.string.fetch_preview), false); form.addView(fetch, new LinearLayout.LayoutParams(-1, dp(48)));
+        String[] previewUrl = {""};
+        TextView previewStatus = label("Keepr will fetch available public text and photos after saving. Some sites only expose a link.",13,muted); form.addView(previewStatus);
+        Button fetch = button(getString(R.string.fetch_preview),false); form.addView(fetch,new LinearLayout.LayoutParams(-1,dp(48)));
         fetch.setOnClickListener(v -> {
             String requested;
             try { requested = UrlExtractor.normalize(url.getText().toString()); }
             catch (IllegalArgumentException e) { url.setError(e.getMessage()); return; }
-            preview[0] = null; previewError[0] = ""; previewUrl[0] = requested;
+            preview[0]=null; previewUrl[0]=requested;
             fetch.setEnabled(false); previewStatus.setText(R.string.fetching_preview);
+            String originalText = text.getText().toString();
             previewWorker.execute(() -> {
                 try {
                     PreviewMetadata result = new MetadataService().fetch(requested);
                     runOnUiThread(() -> {
                         if (isDestroyed()) return;
-                        preview[0] = result; fetch.setEnabled(true);
+                        fetch.setEnabled(true);
+                        if (!url.getText().toString().trim().equals(requested)) return;
+                        preview[0]=result;
                         if (title.getText().toString().trim().isEmpty()) title.setText(result.title());
-                        previewStatus.setText(result.description().isEmpty() ? "Preview fetched. Some fields may be unavailable." : result.description());
+                        if (text.getText().toString().equals(originalText) && (originalText.isEmpty() || originalText.equals(sharedText)) && !result.description().isEmpty()) text.setText(result.description());
+                        previewStatus.setText(getString(R.string.preview_photo_count,result.imageUrls().size()));
                     });
-                } catch (Exception e) {
-                    runOnUiThread(() -> {
-                        if (isDestroyed()) return;
-                        previewError[0] = e.getMessage() == null ? "Preview unavailable" : e.getMessage();
-                        fetch.setEnabled(true); previewStatus.setText(getString(R.string.preview_error, previewError[0]));
-                    });
-                }
+                } catch (Exception e) { runOnUiThread(() -> {
+                    if (!isDestroyed()) { fetch.setEnabled(true); previewStatus.setText(R.string.preview_not_available); }
+                }); }
             });
         });
-        Spinner categories = new Spinner(this);
-        categories.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, CATEGORIES));
-        form.addView(label("CATEGORY", 11, muted));
-        categories.setContentDescription("Category"); categories.setBackground(surface(canvas, 12, line));
-        form.addView(categories, new LinearLayout.LayoutParams(-1, dp(52)));
-        EditText notes = field(form, "Notes (optional)"); notes.setSingleLine(false);
+        EditText notes = field(form,"My notes (optional)"); notes.setSingleLine(false);
         ScrollView scroll = new ScrollView(this); scroll.addView(form);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Save to your vault")
-            .setView(scroll).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create();
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Save to Keepr")
+                .setView(scroll).setNegativeButton("Cancel",null).setPositiveButton("Save post",null).create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            if (!storageHealthy) { Toast.makeText(this, "Storage is unavailable", Toast.LENGTH_LONG).show(); return; }
+            if (!storageHealthy) { Toast.makeText(this,"Storage is unavailable",Toast.LENGTH_LONG).show(); return; }
             try {
-                String normalized = UrlExtractor.normalize(url.getText().toString());
+                String input = url.getText().toString().trim();
+                String normalized = input.isEmpty() ? "" : UrlExtractor.normalize(input);
+                if (normalized.isEmpty() && text.getText().toString().trim().isEmpty() && attachments.isEmpty()) { url.setError("Add a link, post text, or shared photo."); return; }
+                List<String> tagNames = TagNames.parse(tags.getText().toString());
                 PreviewMetadata snapshot = normalized.equals(previewUrl[0]) ? preview[0] : null;
-                String error = normalized.equals(previewUrl[0]) ? previewError[0] : "";
                 String itemTitle = title.getText().toString().trim();
-                if (itemTitle.isEmpty()) itemTitle = java.net.URI.create(normalized).getHost();
-                long now = System.currentTimeMillis();
-                SavedItem link = new SavedItem(java.util.UUID.randomUUID().toString(), normalized, itemTitle,
-                        snapshot == null ? "" : snapshot.description(), snapshot == null ? "" : snapshot.siteName(),
-                        snapshot == null ? "" : snapshot.imageUrl(), snapshot == null ? "" : snapshot.price(),
-                        snapshot == null ? "" : snapshot.currency(), snapshot == null ? "" : snapshot.contact(),
-                        notes.getText().toString().trim(), categories.getSelectedItem().toString(), SavedItem.Status.ACTIVE,
-                        snapshot != null ? SavedItem.PreviewState.READY : error.isEmpty() ? SavedItem.PreviewState.PENDING : SavedItem.PreviewState.FAILED,
-                        error, now, now);
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+                if (itemTitle.isEmpty()) itemTitle = normalized.isEmpty() ? "Shared post" : java.net.URI.create(normalized).getHost();
+                long now=System.currentTimeMillis(); String id=java.util.UUID.randomUUID().toString();
+                String savedTitle=itemTitle, postText=text.getText().toString().trim(), myNotes=notes.getText().toString().trim();
+                String folder=categories.getSelectedItem().toString();
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false); dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);
+                dialog.setCancelable(false);
                 databaseWorker.execute(() -> {
+                    List<CachedMedia> copied = new ArrayList<>(); int failed=0;
                     try {
+                        for (Uri uri : attachments) {
+                            try { copied.add(new MediaCache(this).copyShared(id,uri)); } catch (Exception e) { failed++; }
+                        }
+                        SavedItem link = new SavedItem(id,normalized,savedTitle,postText,
+                                snapshot==null ? "" : snapshot.siteName(),snapshot==null ? "" : snapshot.imageUrl(),
+                                snapshot==null ? "" : snapshot.price(),snapshot==null ? "" : snapshot.currency(),snapshot==null ? "" : snapshot.contact(),
+                                myNotes,folder,SavedItem.Status.ACTIVE,normalized.isEmpty() ? SavedItem.PreviewState.READY : SavedItem.PreviewState.PENDING,
+                                failed>0 ? "Some shared photos could not be copied. Share the missing photo again to save it." : "",now,now,
+                                sharedText,java.util.Collections.unmodifiableList(tagNames),java.util.Collections.unmodifiableList(copied));
                         store.add(link);
-                        runOnUiThread(() -> { if (!isDestroyed()) { dialog.dismiss(); } });
-                    } catch (Exception e) { runOnUiThread(() -> {
-                        if (!isDestroyed()) { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true); url.setError("Could not save. Please try again."); }
-                    }); }
+                        if (!normalized.isEmpty()) {
+                            try { SnapshotWorker.enqueue(this,id); } catch (Exception ignored) { /* Pending items are scheduled on next launch. */ }
+                        }
+                        runOnUiThread(() -> { if (!isDestroyed()) { rebuildFolderChips(); dialog.dismiss(); } });
+                    } catch (Exception e) {
+                        for (CachedMedia media : copied) new java.io.File(getFilesDir(),media.relativePath()).delete();
+                        runOnUiThread(() -> { if (!isDestroyed()) {
+                            dialog.setCancelable(true); dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true); url.setError("Could not save. Please try again.");
+                        } });
+                    }
                 });
-            } catch (IllegalArgumentException e) { url.setError(e.getMessage()); }
+            } catch (IllegalArgumentException e) { Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show(); }
         }));
-        editor = dialog; editorUrl = url; editorTitle = title; editorNotes = notes; editorCategory = categories;
+        editor=dialog; editorUrl=url; editorTitle=title; editorNotes=notes; editorText=text; editorTags=tags; editorCategory=categories;
         dialog.show();
+        if (automatic && !sharedUrl.isEmpty()) fetch.performClick();
+    }
+
+    private ImageView photo(CachedMedia media, int height) {
+        ImageView view = new ImageView(this); view.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        view.setBackground(surface(canvas,14,line)); view.setClipToOutline(true); view.setTag(media.id());
+        view.setContentDescription(getString(R.string.saved_photo));
+        imageWorker.execute(() -> {
+            android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options(); options.inJustDecodeBounds=true;
+            String path = new java.io.File(getFilesDir(),media.relativePath()).getPath();
+            android.graphics.BitmapFactory.decodeFile(path,options);
+            options.inSampleSize=1;
+            while (Math.max(options.outWidth,options.outHeight)/options.inSampleSize > 900) options.inSampleSize*=2;
+            options.inJustDecodeBounds=false;
+            android.graphics.Bitmap bitmap=android.graphics.BitmapFactory.decodeFile(path,options);
+            runOnUiThread(() -> { if (!isDestroyed() && bitmap!=null && media.id().equals(view.getTag())) view.setImageBitmap(bitmap); });
+        });
+        return view;
+    }
+
+    private void showSavedPost(SavedItem item) {
+        startActivity(new Intent(this,PostDetailActivity.class).putExtra("item_id",item.id()));
     }
 
     @Override protected void onSaveInstanceState(Bundle out) {
@@ -337,7 +454,11 @@ public final class MainActivity extends Activity {
             out.putString("draft_url", editorUrl.getText().toString());
             out.putString("draft_title", editorTitle.getText().toString());
             out.putString("draft_notes", editorNotes.getText().toString());
-            out.putInt("draft_category", editorCategory.getSelectedItemPosition());
+            out.putString("draft_folder",editorCategory.getSelectedItem().toString());
+            out.putString("draft_text",editorText.getText().toString()); out.putString("draft_tags",editorTags.getText().toString());
+            out.putString("shared_text",editorSharedText);
+            ArrayList<String> uris=new ArrayList<>(); for (Uri uri : editorAttachments) uris.add(uri.toString());
+            out.putStringArrayList("draft_attachments",uris);
         }
         super.onSaveInstanceState(out);
     }
@@ -347,6 +468,8 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (workUpdates!=null && workObserver!=null) workUpdates.removeObserver(workObserver);
+        imageWorker.shutdownNow();
         previewWorker.shutdownNow();
         databaseWorker.execute(store::close);
         databaseWorker.shutdown();
@@ -354,20 +477,37 @@ public final class MainActivity extends Activity {
     }
 
     private void receiveShare(Intent intent) {
-        if (!Intent.ACTION_SEND.equals(intent.getAction()) || !"text/plain".equals(intent.getType())) return;
-        String text = intent.getStringExtra(Intent.EXTRA_TEXT);
-        if (text == null && intent.getClipData() != null && intent.getClipData().getItemCount() > 0) {
-            CharSequence clip = intent.getClipData().getItemAt(0).getText();
-            if (clip != null) text = clip.toString();
-        }
-        List<String> urls = UrlExtractor.extract(text);
-        if (urls.isEmpty()) {
-            Toast.makeText(this, "No valid web link found. Paste a link to save it.", Toast.LENGTH_LONG).show();
-            showEditor("");
-        } else if (urls.size() == 1) showEditor(urls.get(0));
-        else new AlertDialog.Builder(this).setTitle("Choose a link to keep")
-            .setItems(urls.toArray(new String[0]), (dialog, index) -> showEditor(urls.get(index)))
-            .setNegativeButton("Cancel", null).show();
+        if (!Intent.ACTION_SEND.equals(intent.getAction()) && !Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) return;
+        String type=intent.getType(); if (type==null || !(type.startsWith("text/") || type.startsWith("image/"))) return;
+        String text=""; ArrayList<Uri> attachments=new ArrayList<>();
+        try {
+            CharSequence shared=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            if (shared!=null) text=shared.toString();
+            if (text.isEmpty()) {
+                String html=intent.getStringExtra(Intent.EXTRA_HTML_TEXT);
+                if (html!=null) text=android.text.Html.fromHtml(html,android.text.Html.FROM_HTML_MODE_LEGACY).toString();
+            }
+            if (Intent.ACTION_SEND_MULTIPLE.equals(intent.getAction())) {
+                ArrayList<Uri> streams=intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+                if (streams!=null) for (Uri uri : streams) addAttachment(attachments,uri);
+            } else addAttachment(attachments,intent.getParcelableExtra(Intent.EXTRA_STREAM));
+            if (intent.getClipData()!=null) for (int i=0;i<intent.getClipData().getItemCount();i++) {
+                android.content.ClipData.Item clip=intent.getClipData().getItemAt(i);
+                addAttachment(attachments,clip.getUri());
+                if (text.isEmpty() && clip.getText()!=null) text=clip.getText().toString();
+            }
+        } catch (RuntimeException e) { Toast.makeText(this,"Some shared content could not be read",Toast.LENGTH_LONG).show(); }
+        text=text.substring(0,Math.min(65536,text.length()));
+        List<String> urls=UrlExtractor.extract(text);
+        String sharedText=text; ArrayList<Uri> images=attachments;
+        if (urls.isEmpty()) showEditor("",sharedText,images,false);
+        else if (urls.size()==1) showEditor(urls.get(0),sharedText,images,true);
+        else new AlertDialog.Builder(this).setTitle("Choose the original post link")
+                .setItems(urls.toArray(new String[0]),(dialog,index)->showEditor(urls.get(index),sharedText,images,true))
+                .setNegativeButton("Cancel",null).show();
+    }
+    private void addAttachment(ArrayList<Uri> attachments, Uri uri) {
+        if (uri!=null && "content".equals(uri.getScheme()) && !attachments.contains(uri)) attachments.add(uri);
     }
 
     private void openLink(String url) {

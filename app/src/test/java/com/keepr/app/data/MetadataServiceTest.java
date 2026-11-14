@@ -51,6 +51,20 @@ public class MetadataServiceTest {
             assertEquals("Café", new MetadataService(new OkHttpClient()).fetch(server.url("/").toString()).title());
         }
     }
+    @Test public void downloadsOnlyBoundedImagesAndChecksRedirects() throws Exception {
+        try (MockWebServer server = new MockWebServer()) {
+            MetadataService service=new MetadataService(new OkHttpClient());
+            server.enqueue(new MockResponse().setResponseCode(302).addHeader("Location","/photo"));
+            server.enqueue(new MockResponse().addHeader("Content-Type","image/jpeg").setBody("image bytes"));
+            assertArrayEquals("image bytes".getBytes(java.nio.charset.StandardCharsets.UTF_8),service.fetchImage(server.url("/start").toString()));
+            server.enqueue(new MockResponse().addHeader("Content-Type","text/html").setBody("login page"));
+            try { service.fetchImage(server.url("/html").toString()); fail(); } catch (IOException expected) { assertTrue(expected.getMessage().contains("Not an image")); }
+            server.enqueue(new MockResponse().addHeader("Content-Type","image/jpeg").setBody("x".repeat(MediaCache.MAX_BYTES+1)));
+            try { service.fetchImage(server.url("/large").toString()); fail(); } catch (IOException expected) { assertTrue(expected.getMessage().contains("8 MiB")); }
+            server.enqueue(new MockResponse().setResponseCode(302).addHeader("Location","http://user:password@example.com/image"));
+            try { service.fetchImage(server.url("/unsafe").toString()); fail(); } catch (IOException expected) { assertTrue(expected.getMessage().contains("Unsafe")); }
+        }
+    }
     private void expectFailure(MetadataService service, String url, String message) throws Exception {
         try { service.fetch(url); fail("Expected failure"); }
         catch (IOException expected) { assertTrue(expected.toString(), expected.getMessage().contains(message)); }

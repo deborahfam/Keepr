@@ -7,6 +7,8 @@ import java.util.function.Consumer;
 public interface SavedItemRepository extends AutoCloseable {
     List<SavedItem> load() throws Exception;
     void add(SavedItem item);
+    java.util.List<String> folders();
+    boolean needsPhotoDiscovery(String id);
     void delete(String id);
     void observe(Consumer<List<SavedItem>> observer);
     @Override void close();

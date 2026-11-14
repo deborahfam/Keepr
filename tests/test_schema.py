@@ -16,9 +16,39 @@ class SchemaTest(unittest.TestCase):
         statements = re.findall(r'db\.execSQL\(("(?:[^"\\]|\\.)*")\);', SOURCE.read_text())
         self.assertGreaterEqual(len(statements), 8)
         for statement in statements:
-            self.db.execute(json.loads(statement))
+            sql=json.loads(statement)
+            if sql.startswith("CREATE"): self.db.execute(sql)
         self.db.execute("INSERT INTO Category VALUES ('c', 'Electronics', 1)")
         self.db.execute("INSERT INTO SavedItem(id,url,category_id,created_at,updated_at) VALUES ('i','https://example.com','c',1,1)")
+
+    def test_v1_upgrade_preserves_data(self):
+        old = sqlite3.connect(":memory:")
+        self.addCleanup(old.close)
+        old.execute("CREATE TABLE SavedItem(id TEXT PRIMARY KEY, title TEXT)")
+        old.execute("INSERT INTO SavedItem VALUES ('old','Preserved')")
+        source = SOURCE.read_text().split("@Override public void onUpgrade")[1]
+        statement = re.search(r'db\.execSQL\(("(?:[^"\\]|\\.)*")\);', source).group(1)
+        old.execute(json.loads(statement))
+        self.assertEqual(("Preserved", ""), old.execute("SELECT title,shared_text FROM SavedItem").fetchone())
+
+    def test_download_queue_keeps_all_photos_and_cascades(self):
+        for index in range(30):
+            self.db.execute("INSERT INTO MediaDownload(saved_item_id,source_url,position) VALUES ('i',?,?)", (f"https://example.com/{index}.jpg",index))
+        self.assertEqual(30,self.db.execute("SELECT count(*) FROM MediaDownload").fetchone()[0])
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.db.execute("UPDATE MediaDownload SET state='LOST'")
+        self.db.execute("DELETE FROM SavedItem")
+        self.assertEqual(0,self.db.execute("SELECT count(*) FROM MediaDownload").fetchone()[0])
+
+    def test_v3_upgrade_adds_discovery_counts_without_data_loss(self):
+        old=sqlite3.connect(":memory:"); self.addCleanup(old.close)
+        old.execute("CREATE TABLE SavedItem(id TEXT PRIMARY KEY,title TEXT)")
+        old.execute("INSERT INTO SavedItem VALUES ('existing','Keep me')")
+        source=SOURCE.read_text().split("if (oldVersion < 4)")[1]
+        for statement in re.findall(r'db\.execSQL\(("(?:[^"\\]|\\.)*")\);',source):
+            sql=json.loads(statement)
+            if sql.startswith("ALTER"): old.execute(sql)
+        self.assertEqual(("Keep me",0,0),old.execute("SELECT title,expected_photos,capture_version FROM SavedItem").fetchone())
 
     def test_defaults_and_status_constraint(self):
         self.assertEqual(("ACTIVE", "PENDING"), self.db.execute("SELECT status,preview_state FROM SavedItem").fetchone())

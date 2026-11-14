@@ -35,6 +35,38 @@ public final class MetadataService {
                 .connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
                 .callTimeout(15, TimeUnit.SECONDS).retryOnConnectionFailure(false).build();
     }
+    public byte[] fetchImage(String input) throws IOException {
+        String url;
+        try { url = UrlExtractor.normalize(input); } catch (IllegalArgumentException e) { throw new IOException("Invalid image URL", e); }
+        Set<String> visited = new HashSet<>();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(25);
+        for (int hop = 0; hop <= 5; hop++) {
+            if (!visited.add(url)) throw new IOException("Image redirect loop");
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) throw new IOException("Image request timed out");
+            Call call = client.newCall(new Request.Builder().url(url).header("User-Agent", "Keepr/0.1 (link preview)")
+                    .header("Accept", "image/*").build());
+            call.timeout().timeout(Math.min(remaining, TimeUnit.SECONDS.toNanos(15)), TimeUnit.NANOSECONDS);
+            try (Response response = call.execute()) {
+                if (Arrays.asList(301,302,303,307,308).contains(response.code())) {
+                    String location = response.header("Location");
+                    HttpUrl next = location == null ? null : response.request().url().resolve(location);
+                    if (next == null) throw new IOException("Invalid image redirect");
+                    String destination;
+                    try { destination = UrlExtractor.normalize(next.toString()); }
+                    catch (IllegalArgumentException e) { throw new IOException("Unsafe image redirect",e); }
+                    if (url.startsWith("https:") && destination.startsWith("http:")) throw new IOException("Insecure image redirect");
+                    url = destination; continue;
+                }
+                ResponseBody body = response.body();
+                if (!response.isSuccessful() || body == null) throw new IOException("Photo unavailable (HTTP " + response.code() + ")");
+                if (body.contentType() == null || !"image".equals(body.contentType().type())) throw new IOException("Not an image response");
+                if (body.contentLength() > MediaCache.MAX_BYTES) throw new IOException("Photo exceeds 8 MiB");
+                return MediaCache.readBounded(body.byteStream(),MediaCache.MAX_BYTES);
+            }
+        }
+        throw new IOException("Too many image redirects");
+    }
     public PreviewMetadata fetch(String input) throws IOException {
         String url;
         try { url = UrlExtractor.normalize(input); }
@@ -83,7 +115,15 @@ public final class MetadataService {
                 if (bytes.length > MAX_BYTES) throw new IOException("Preview page exceeds 2 MiB");
                 Charset charset = type.charset();
                 org.jsoup.nodes.Document document = org.jsoup.Jsoup.parse(new java.io.ByteArrayInputStream(bytes), charset == null ? null : charset.name(), url);
-                return new MetadataParser().parse(document, url);
+                PreviewMetadata preview=new MetadataParser().parse(document,url);
+                String host=java.net.URI.create(url).getHost().toLowerCase(java.util.Locale.ROOT);
+                String title=preview.title().trim().toLowerCase(java.util.Locale.ROOT);
+                boolean social=host.equals("facebook.com") || host.endsWith(".facebook.com") || host.equals("instagram.com") || host.endsWith(".instagram.com");
+                String path=java.net.URI.create(url).getPath();
+                if (social && (path.contains("/login") || path.contains("/accounts/login") || path.contains("/checkpoint")
+                        || title.equals("facebook") || title.equals("instagram") || title.contains("log into facebook") || title.contains("login • instagram")))
+                    throw new IOException("The source returned a login page instead of a public post");
+                return preview;
             } catch (IllegalArgumentException e) { throw new IOException("Invalid preview response", e); }
         }
         throw new IOException("Too many redirects");

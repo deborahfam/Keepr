@@ -10,4 +10,19 @@
     <string name="search_finds">Search your finds</string>
     <string name="all_finds">All finds</string>
     <string name="item_options">Options for %1$s</string>
+    <string name="new_folder">New folder</string>
+    <string name="folder_name">Folder name</string>
+    <string name="view_saved_post">View saved post</string>
+    <string name="saved_photo">Saved post photo</string>
+    <string name="view_saved_photos">View saved post, %1$d photos</string>
+    <string name="preview_photo_count">Preview found %1$d photo link(s). Photos download after saving.</string>
+    <string name="preview_not_available">The source did not provide a preview. You can still save the shared text, attached photos, and link.</string>
+    <string name="refresh_post">Retry text and photos</string>
+    <string name="back_to_collection">Back to collection</string>
+    <string name="gallery_position">Photo %1$d of %2$d</string>
+    <string name="previous_photo">Previous photo</string>
+    <string name="next_photo">Next photo</string>
+    <string name="retry_missing_photos">Retry missing photos</string>
+    <string name="photos_saved_count">%1$d photos saved offline</string>
+    <string name="add_photos">Add photos from phone</string>
 </resources>
