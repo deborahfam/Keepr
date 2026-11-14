@@ -33,17 +33,25 @@ Tap **View saved post** on any card:
 
 Photos load one at a time in the carousel, so large albums do not decode every image into memory. Current tab and photo position survive screen recreation. Photos are presented in discovered publication order, including those completed on a later retry.
 
+## Backup, restore, and editing
+
+Use **Backup and restore** below the collection to export a ZIP through Android's document picker. It contains every saved post, folder, tag, original shared caption, offline photo, and photo-download state. Keep the exported file outside this device. Backups are unencrypted; choose a trusted destination. Keep Keepr open until it reports completion. Failed exports may leave an incomplete destination file; export again before relying on it.
+
+**Restore backup** validates the archive and photo checksums before merging missing posts in a database transaction. Existing post IDs are skipped, preserving newer local edits. Folder/tag names are matched ignoring case. Missing or damaged photos, invalid paths, and unsupported archive versions reject the import. Restore does not erase your collection. Pending capture work is rescheduled after import. Format version 1 supports up to 32 MiB of metadata, 8 MiB per photo, and 4 GiB of uncompressed content.
+
+Open a saved post and tap **Edit saved post** to change its title, personal notes, tags, or folder. Choose an existing folder or type a new folder name. Photos, source content, tracking status, creation date, and download progress are preserved. Edited titles are protected from background preview replacement. Unsaved edit fields survive screen recreation.
+
 ## Architecture
 
 - `domain/`: immutable SavedItem, Category, CachedMedia models; tag normalization; SavedItemRepository interface.
 - `data/`: SQLiteSavedItemRepository, VaultDatabase, MetadataParser/StructuredPost, MetadataService, MediaCache, SnapshotWorker.
 - `MainActivity`: incoming-share review, folder/tag selection, collection feed, and offline saved-post viewer. Separate workers handle database, network-preview, and bitmap decoding work. Immutable repository snapshots and WorkManager updates refresh the feed.
 
-SQLite schema version 4 contains SavedItem (metadata, original shared text, folder, status, preview state/error, timestamps), Category, Tag, SavedItemTag, CachedMedia (source URL, app-private relative path, MIME type, byte count, SHA-256, cache timestamp), and MediaDownload (every discovered URL, publication order, download state, attempt count, and error). Foreign keys cascade item/media/tag membership deletion and preserve items when a category is removed. Status accepts ACTIVE, REACHED_OUT, PURCHASED, or ARCHIVED; status editing is not yet exposed. The upgrade from v1 adds shared_text and the upgrade from v2 adds the download queue and v3 adds expected photo counts/discovery version without removing existing data; original JSON collections are migrated transactionally and kept as recovery copies. Repeated saves of a URL are allowed.
+SQLite schema version 5 contains SavedItem (metadata, original shared text, folder, status, preview state/error, timestamps), Category, Tag, SavedItemTag, CachedMedia (source URL, app-private relative path, MIME type, byte count, SHA-256, cache timestamp), and MediaDownload (every discovered URL, publication order, download state, attempt count, and error). Foreign keys cascade item/media/tag membership deletion and preserve items when a category is removed. Status accepts ACTIVE, REACHED_OUT, PURCHASED, or ARCHIVED; status editing is not yet exposed. The upgrade from v1 adds shared_text and the upgrade from v2 adds the download queue and v3 adds expected photo counts/discovery version without removing existing data; v5 adds a flag protecting edited titles; original JSON collections are migrated transactionally and kept as recovery copies. Repeated saves of a URL are allowed.
 
 HTTP requests use normal TLS verification, a descriptive User-Agent, no cookies/authorization/proxy, 8-second connect/read timeouts, 15-second per-call timeout, 25-second redirect-chain budget, five redirects maximum, and a 2 MiB decompressed HTML cap. DNS resolution rejects private/local, link-local, multicast, and selected reserved addresses. Redirects are revalidated and reject credentials, non-web schemes, and HTTPS-to-HTTP downgrades. Explicit public HTTP links are permitted and unencrypted. HTML charset/BOM detection is supported.
 
-Data remains in app-private storage. Backup and device transfer are excluded; uninstalling removes local data. No backend, account, cloud sync, analytics, or release signing is configured.
+Data remains in app-private storage. Automatic Android backup and device transfer are excluded; uninstalling removes local data. Use the manual ZIP backup to preserve and transfer your collection. No backend, account, cloud sync, analytics, or release signing is configured.
 
 ## Build and verify
 

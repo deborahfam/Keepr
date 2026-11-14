@@ -44,6 +44,7 @@ public final class MainActivity extends Activity {
     private Spinner editorCategory;
     private String category = "All", query = "";
     private boolean storageHealthy = false;
+    private boolean resumedOnce;
     private final int ink = Color.rgb(39, 34, 59);
     private final int muted = Color.rgb(107, 101, 122);
     private final int accent = Color.rgb(102, 72, 202);
@@ -112,6 +113,18 @@ public final class MainActivity extends Activity {
         };
         workUpdates=androidx.work.WorkManager.getInstance(this).getWorkInfosByTagLiveData("keepr-snapshot");
         workUpdates.observeForever(workObserver);
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if(!resumedOnce) { resumedOnce=true; return; }
+        if(store==null) return;
+        databaseWorker.execute(()->{
+            try {
+                List<SavedItem> refreshed=store.load(); List<String> savedFolders=store.folders();
+                runOnUiThread(()->{ if(!isDestroyed()) { links.clear(); links.addAll(refreshed); folders.clear(); folders.addAll(savedFolders); rebuildFolderChips(); renderCards(); } });
+            } catch(Exception ignored) { }
+        });
     }
 
     private void buildScreen() {
@@ -185,6 +198,9 @@ public final class MainActivity extends Activity {
         add.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_add, 0, 0, 0);
         add.setCompoundDrawablePadding(dp(10));
         add.setOnClickListener(v -> showEditor("")); dock.addView(add, new LinearLayout.LayoutParams(-1, dp(56)));
+        Button backup=button(getString(R.string.backup_restore),false);
+        backup.setOnClickListener(v->startActivity(new Intent(this,BackupActivity.class)));
+        dock.addView(backup,new LinearLayout.LayoutParams(-1,dp(48)));
         root.addView(dock); setContentView(root); renderCards();
     }
 

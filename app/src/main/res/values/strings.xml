@@ -25,4 +25,16 @@
     <string name="retry_missing_photos">Retry missing photos</string>
     <string name="photos_saved_count">%1$d photos saved offline</string>
     <string name="add_photos">Add photos from phone</string>
+    <string name="backup_restore">Backup and restore</string>
+    <string name="export_backup">Export backup</string>
+    <string name="restore_backup">Restore backup</string>
+    <string name="choose_backup">Choose backup</string>
+    <string name="backup_explanation">Save your posts, folders, tags, and offline photos in a ZIP file. Keep a copy outside this device to protect against device loss. Backups are not encrypted; store them somewhere you trust. Keep Keepr open until the operation finishes.</string>
+    <string name="restore_explanation">Missing posts will be added. Posts already in your collection will stay unchanged, including edits made since the backup.</string>
+    <string name="edit_post">Edit saved post</string>
+    <string name="edit_title">Title</string>
+    <string name="edit_notes">My notes</string>
+    <string name="edit_folder">Folder (choose or type a new name)</string>
+    <string name="edit_tags">Tags (comma separated)</string>
+    <string name="save_changes">Save changes</string>
 </resources>

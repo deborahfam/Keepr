@@ -50,6 +50,15 @@ class SchemaTest(unittest.TestCase):
             if sql.startswith("ALTER"): old.execute(sql)
         self.assertEqual(("Keep me",0,0),old.execute("SELECT title,expected_photos,capture_version FROM SavedItem").fetchone())
 
+    def test_v4_upgrade_preserves_titles_and_adds_edit_protection(self):
+        old = sqlite3.connect(":memory:")
+        self.addCleanup(old.close)
+        old.execute("CREATE TABLE SavedItem(id TEXT PRIMARY KEY, title TEXT)")
+        old.execute("INSERT INTO SavedItem VALUES ('old', 'My title')")
+        statement = re.search(r'if \(oldVersion < 5\) db\.execSQL\(("[^";]+")\)', SOURCE.read_text()).group(1)
+        old.execute(json.loads(statement))
+        self.assertEqual(("My title", 0), old.execute("SELECT title,title_edited FROM SavedItem").fetchone())
+
     def test_defaults_and_status_constraint(self):
         self.assertEqual(("ACTIVE", "PENDING"), self.db.execute("SELECT status,preview_state FROM SavedItem").fetchone())
         with self.assertRaises(sqlite3.IntegrityError):

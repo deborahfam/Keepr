@@ -32,11 +32,16 @@ public final class PostDetailActivity extends Activity {
     private LiveData<List<WorkInfo>> updates;
     private androidx.lifecycle.Observer<List<WorkInfo>> observer;
     private Dialog photoDialog;
+    private AlertDialog editDialog;
+    private EditText editTitle,editNotes,editTags;
+    private AutoCompleteTextView editFolder;
+    private Bundle pendingEdit;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state); id=getIntent().getStringExtra("item_id");
         if(id==null) { finish(); return; }
         if(state!=null) { photoIndex=state.getInt("photo",0); tab=state.getString("tab","Post"); }
+        if(state!=null && state.getBoolean("editing")) pendingEdit=new Bundle(state);
         repository=new SQLiteSavedItemRepository(this);
         LinearLayout root=column(); root.setBackgroundColor(paper);
         root.setOnApplyWindowInsetsListener((view,insets)->{
@@ -64,7 +69,7 @@ public final class PostDetailActivity extends Activity {
                     String selected=item!=null && photoIndex<item.media().size() ? item.media().get(photoIndex).id() : null;
                     item=loaded;
                     if(selected!=null) for(int i=0;i<item.media().size();i++) if(item.media().get(i).id().equals(selected)) photoIndex=i;
-                    progress=state; render(); });
+                    progress=state; render(); if(pendingEdit!=null) { Bundle draft=pendingEdit; pendingEdit=null; showEdit(draft); } });
             } catch(Exception error) { runOnUiThread(()->{ if(!isDestroyed()) Toast.makeText(this,"Could not open this saved post",Toast.LENGTH_LONG).show(); }); }
         });
     }
@@ -107,6 +112,8 @@ public final class PostDetailActivity extends Activity {
             section("Source",item.siteName().isEmpty() ? "Shared content" : item.siteName());
             section("Original link",item.url()); section("Capture notes",item.previewError());
         }
+        Button edit=button(getString(R.string.edit_post),false); body.addView(edit,block());
+        edit.setOnClickListener(v->showEdit(null));
         Button addPhotos=button(getString(R.string.add_photos),false); body.addView(addPhotos,block());
         addPhotos.setOnClickListener(v->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT)
                 .addCategory(Intent.CATEGORY_OPENABLE).setType("image/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true),42));
@@ -121,6 +128,35 @@ public final class PostDetailActivity extends Activity {
                 repository.retryPhotos(id); SnapshotWorker.enqueue(this,id); runOnUiThread(this::reload);
             }); });
         }
+    }
+    private void showEdit(Bundle draft) {
+        if(item==null || (editDialog!=null && editDialog.isShowing())) return;
+        LinearLayout form=column(); form.setPadding(dp(20),dp(12),dp(20),dp(12));
+        editTitle=editField(form,R.string.edit_title,draft==null?item.title():draft.getString("edit_title"),false);
+        editNotes=editField(form,R.string.edit_notes,draft==null?item.notes():draft.getString("edit_notes"),true);
+        form.addView(text(getString(R.string.edit_folder),14,ink)); editFolder=new AutoCompleteTextView(this);
+        editFolder.setSingleLine(true); editFolder.setThreshold(0);
+        editFolder.setText(draft==null?(item.categoryId()==null?"Other":item.categoryId()):draft.getString("edit_folder")); form.addView(editFolder);
+        editTags=editField(form,R.string.edit_tags,draft==null?String.join(", ",item.tags()):draft.getString("edit_tags"),false);
+        database.execute(()->{ List<String> folders=repository.folders(); runOnUiThread(()->{ if(!isDestroyed() && editDialog!=null && editDialog.isShowing()) {
+            editFolder.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_dropdown_item_1line,folders));
+            editFolder.setOnClickListener(v->editFolder.showDropDown());
+        } }); });
+        ScrollView scroll=new ScrollView(this); scroll.addView(form);
+        editDialog=new AlertDialog.Builder(this).setTitle(R.string.edit_post).setView(scroll).setNegativeButton(android.R.string.cancel,null).setPositiveButton(R.string.save_changes,null).create();
+        editDialog.setOnShowListener(d->editDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String title=editTitle.getText().toString(),notes=editNotes.getText().toString(),folder=editFolder.getText().toString(),tags=editTags.getText().toString();
+            AlertDialog dialog=editDialog; dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            database.execute(()->{
+                try { repository.edit(id,title,notes,folder,tags); runOnUiThread(()->{ if(!isDestroyed()) { dialog.dismiss(); reload(); Toast.makeText(this,"Changes saved",Toast.LENGTH_SHORT).show(); } }); }
+                catch(Exception error) { String message=error instanceof IllegalArgumentException || error instanceof IllegalStateException?error.getMessage():"Could not save changes. Please try again.";
+                    runOnUiThread(()->{ if(!isDestroyed()) { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true); Toast.makeText(this,message,Toast.LENGTH_LONG).show(); } }); }
+            });
+        })); editDialog.show();
+    }
+    private EditText editField(LinearLayout form,int label,String value,boolean multiline) {
+        form.addView(text(getString(label),14,ink)); EditText input=new EditText(this); input.setSingleLine(!multiline); if(multiline) input.setMinLines(3);
+        input.setText(value); input.setContentDescription(getString(label)); form.addView(input); return input;
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
@@ -247,6 +283,9 @@ public final class PostDetailActivity extends Activity {
     }
     private LinearLayout.LayoutParams block() { LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(52)); params.topMargin=dp(14); return params; }
     private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
-    @Override protected void onSaveInstanceState(Bundle state) { state.putInt("photo",photoIndex); state.putString("tab",tab); super.onSaveInstanceState(state); }
-    @Override protected void onDestroy() { if(photoDialog!=null) { photoDialog.setOnDismissListener(null); photoDialog.dismiss(); } if(updates!=null && observer!=null) updates.removeObserver(observer); images.shutdownNow(); if(repository!=null) { database.execute(repository::close); database.shutdown(); } super.onDestroy(); }
+    @Override protected void onSaveInstanceState(Bundle state) { if(editDialog!=null && editDialog.isShowing()) {
+        state.putBoolean("editing",true); state.putString("edit_title",editTitle.getText().toString()); state.putString("edit_notes",editNotes.getText().toString());
+        state.putString("edit_folder",editFolder.getText().toString()); state.putString("edit_tags",editTags.getText().toString());
+    } state.putInt("photo",photoIndex); state.putString("tab",tab); super.onSaveInstanceState(state); }
+    @Override protected void onDestroy() { if(editDialog!=null) editDialog.dismiss(); if(photoDialog!=null) { photoDialog.setOnDismissListener(null); photoDialog.dismiss(); } if(updates!=null && observer!=null) updates.removeObserver(observer); images.shutdownNow(); if(repository!=null) { database.execute(repository::close); database.shutdown(); } super.onDestroy(); }
 }

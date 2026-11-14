@@ -100,6 +100,32 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         v.put("created_at", item.createdAt()); v.put("updated_at", item.updatedAt());
         db.insertOrThrow("SavedItem", null, v);
     }
+    SQLiteDatabase backupDatabase() { return helper.getWritableDatabase(); }
+    public void edit(String id, String title, String notes, String folder, String tagText) {
+        title=title.trim(); folder=folder.trim();
+        if(title.isEmpty() || title.length()>1000) throw new IllegalArgumentException("Use a title from 1 to 1,000 characters.");
+        if(notes.length()>65536) throw new IllegalArgumentException("Notes must be under 65,536 characters.");
+        if(folder.isEmpty() || folder.length()>60 || folder.equalsIgnoreCase("All")) throw new IllegalArgumentException("Use a folder name from 1 to 60 characters, other than All.");
+        List<String> normalized=com.keepr.app.domain.TagNames.parse(tagText);
+        SQLiteDatabase db=helper.getWritableDatabase(); db.beginTransaction();
+        try {
+            String folderId=folder;
+            try(Cursor c=db.rawQuery("SELECT id FROM Category WHERE name=? COLLATE NOCASE",new String[]{folder})) {
+                if(c.moveToFirst()) folderId=c.getString(0);
+                else { ContentValues v=new ContentValues(); v.put("id",folder); v.put("name",folder); v.put("created_at",System.currentTimeMillis()); db.insertOrThrow("Category",null,v); }
+            }
+            ContentValues v=new ContentValues(); v.put("title",title); v.put("title_edited",1); v.put("notes",notes); v.put("category_id",folderId); v.put("updated_at",System.currentTimeMillis());
+            if(db.update("SavedItem",v,"id=?",new String[]{id})!=1) throw new IllegalStateException("This post no longer exists.");
+            db.delete("SavedItemTag","saved_item_id=?",new String[]{id});
+            for(String name:normalized) {
+                ContentValues tag=new ContentValues(); tag.put("id",java.util.UUID.randomUUID().toString()); tag.put("name",name);
+                db.insertWithOnConflict("Tag",null,tag,SQLiteDatabase.CONFLICT_IGNORE);
+                db.execSQL("INSERT INTO SavedItemTag SELECT ?,id FROM Tag WHERE name=? COLLATE NOCASE",new Object[]{id,name});
+            }
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+        emit();
+    }
     @Override public void delete(String id) {
         SQLiteDatabase db=helper.getWritableDatabase(); List<CachedMedia> files;
         db.beginTransaction();
@@ -155,7 +181,10 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         SavedItem item = find(id); if (item == null) return;
         ContentValues v = new ContentValues();
         String host = android.net.Uri.parse(item.url()).getHost();
-        if ((item.title().equals(host) || item.title().equals("Shared post")) && !preview.title().isEmpty()) v.put("title", preview.title());
+        if ((item.title().equals(host) || item.title().equals("Shared post")) && !preview.title().isEmpty()) {
+            ContentValues title=new ContentValues(); title.put("title",preview.title());
+            helper.getWritableDatabase().update("SavedItem",title,"id=? AND title_edited=0 AND title=?",new String[]{id,item.title()});
+        }
         if (!preview.description().isEmpty() && (item.description().isEmpty() || item.description().equals(item.sharedText()))) v.put("description", preview.description());
         v.put("expected_photos",preview.expectedPhotoCount()); v.put("image_url",preview.imageUrl()); v.put("site_name",preview.siteName());
         v.put("price",preview.price()); v.put("currency",preview.currency()); v.put("contact",preview.contact());
