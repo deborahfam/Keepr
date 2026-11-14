@@ -34,11 +34,11 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     private List<SavedItem> query(SQLiteDatabase db) { return query(db,null); }
     private List<SavedItem> query(SQLiteDatabase db,String itemId) {
         List<SavedItem> items = new ArrayList<>();
-        try (Cursor c = db.rawQuery("SELECT id,url,title,description,site_name,image_url,price,currency,contact,notes,(SELECT name FROM Category WHERE id=SavedItem.category_id),status,preview_state,preview_error,created_at,updated_at,shared_text FROM SavedItem"+(itemId==null ? "" : " WHERE id=?")+" ORDER BY created_at DESC,id", itemId==null ? null : new String[]{itemId})) {
+        try (Cursor c = db.rawQuery("SELECT id,url,title,description,site_name,image_url,price,currency,contact,notes,(SELECT name FROM Category WHERE id=SavedItem.category_id),status,preview_state,preview_error,created_at,updated_at,shared_text,expected_photos,(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='PENDING'),(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='FAILED') FROM SavedItem WHERE id NOT IN (SELECT saved_item_id FROM Trash)"+(itemId==null ? "" : " AND id=?")+" ORDER BY created_at DESC,id", itemId==null ? null : new String[]{itemId})) {
             while (c.moveToNext()) items.add(new SavedItem(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
                     c.getString(4), c.getString(5), c.getString(6), c.getString(7), c.getString(8), c.getString(9),
                     c.getString(10), SavedItem.Status.valueOf(c.getString(11)), SavedItem.PreviewState.valueOf(c.getString(12)),
-                    c.getString(13), c.getLong(14), c.getLong(15), c.getString(16), tags(db, c.getString(0)), media(db, c.getString(0))));
+                    c.getString(13), c.getLong(14), c.getLong(15), c.getString(16), tags(db, c.getString(0)), media(db, c.getString(0)),c.getInt(17),c.getInt(18),c.getInt(19)));
         }
         return Collections.unmodifiableList(items);
     }
@@ -54,7 +54,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
                 SavedItem item = new SavedItem(json.getString("id"), json.getString("url"), json.getString("title"),
                         "", "", "", "", "", "", json.optString("notes"), json.getString("category"),
                         SavedItem.Status.ACTIVE, SavedItem.PreviewState.PENDING, "", now, now, "", java.util.Collections.emptyList(), java.util.Collections.emptyList());
-                try (Cursor existing = db.rawQuery("SELECT id FROM SavedItem WHERE id=?", new String[]{item.id()})) {
+                try (Cursor existing = db.rawQuery("SELECT id FROM SavedItem WHERE id=? AND id NOT IN (SELECT saved_item_id FROM Trash)", new String[]{item.id()})) {
                     if (!existing.moveToFirst()) insert(db, item);
                 }
             }
@@ -100,7 +100,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     public SavedItem findDuplicate(String url) {
         if(url==null || url.isEmpty()) return null;
         String normalized=UrlExtractor.normalize(url);
-        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT id,url FROM SavedItem ORDER BY created_at DESC,id",null)) {
+        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT id,url FROM SavedItem WHERE id NOT IN (SELECT saved_item_id FROM Trash) ORDER BY created_at DESC,id",null)) {
             while(c.moveToNext()) {
                 try { if(normalized.equals(UrlExtractor.normalize(c.getString(1)))) return find(c.getString(0)); }
                 catch(IllegalArgumentException ignored) { /* Legacy text-only or invalid source. */ }
@@ -192,6 +192,33 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         } finally { db.endTransaction(); }
         emit();
     }
+    public record TrashedPost(String id,String title,long expiresAt) {}
+    public List<TrashedPost> trashContents() {
+        List<TrashedPost> result=new ArrayList<>();
+        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT s.id,s.title,t.expires_at FROM SavedItem s JOIN Trash t ON t.saved_item_id=s.id ORDER BY t.deleted_at DESC",null)) { while(c.moveToNext()) result.add(new TrashedPost(c.getString(0),c.getString(1),c.getLong(2))); }
+        return result;
+    }
+    public int retentionDays() { return context.getSharedPreferences("keepr",Context.MODE_PRIVATE).getInt("trash_days",30); }
+    public void setRetentionDays(int days) { if(days!=7 && days!=30 && days!=90) throw new IllegalArgumentException("Choose 7, 30, or 90 days."); context.getSharedPreferences("keepr",Context.MODE_PRIVATE).edit().putInt("trash_days",days).apply(); }
+    public void trash(java.util.Collection<String> ids) {
+        SQLiteDatabase db=helper.getWritableDatabase(); long now=System.currentTimeMillis(); db.beginTransaction();
+        try { for(String id:new java.util.HashSet<>(ids)) {
+            ContentValues values=new ContentValues(); values.put("saved_item_id",id); values.put("deleted_at",now); values.put("expires_at",now+java.util.concurrent.TimeUnit.DAYS.toMillis(retentionDays()));
+            db.insertWithOnConflict("Trash",null,values,SQLiteDatabase.CONFLICT_IGNORE);
+        } db.setTransactionSuccessful(); } finally { db.endTransaction(); }
+        emit();
+    }
+    public void restoreTrash(String id) { helper.getWritableDatabase().delete("Trash","saved_item_id=?",new String[]{id}); emit(); }
+    public void purgeExpired() {
+        SQLiteDatabase db=helper.getWritableDatabase(); List<CachedMedia> files=new ArrayList<>(); db.beginTransaction();
+        try {
+            List<String> expired=new ArrayList<>();
+            try(Cursor c=db.rawQuery("SELECT saved_item_id FROM Trash WHERE expires_at<=?",new String[]{Long.toString(System.currentTimeMillis())})) { while(c.moveToNext()) expired.add(c.getString(0)); }
+            for(String id:expired) { files.addAll(media(db,id)); db.delete("SavedItem","id=?",new String[]{id}); }
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+        for(CachedMedia file:files) new java.io.File(context.getFilesDir(),file.relativePath()).delete();
+    }
     @Override public void delete(String id) {
         SQLiteDatabase db=helper.getWritableDatabase(); List<CachedMedia> files;
         db.beginTransaction();
@@ -235,7 +262,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         SQLiteDatabase db = helper.getWritableDatabase();
         db.beginTransaction();
         try {
-            try (Cursor c = db.rawQuery("SELECT id FROM SavedItem WHERE id=?", new String[]{media.savedItemId()})) {
+            try (Cursor c = db.rawQuery("SELECT id FROM SavedItem WHERE id=? AND id NOT IN (SELECT saved_item_id FROM Trash)", new String[]{media.savedItemId()})) {
                 if (!c.moveToFirst()) { new java.io.File(context.getFilesDir(),media.relativePath()).delete(); return; }
             }
             insertMedia(db, media);
@@ -280,7 +307,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     public void planPhotos(String id,List<String> urls) {
         SQLiteDatabase db=helper.getWritableDatabase(); db.beginTransaction();
         try {
-            try(Cursor c=db.rawQuery("SELECT id FROM SavedItem WHERE id=?",new String[]{id})) { if(!c.moveToFirst()) return; }
+            try(Cursor c=db.rawQuery("SELECT id FROM SavedItem WHERE id=? AND id NOT IN (SELECT saved_item_id FROM Trash)",new String[]{id})) { if(!c.moveToFirst()) return; }
             List<CachedMedia> cached=media(db,id);
             int position=0;
             for(String candidate:urls) {

@@ -13,7 +13,7 @@ import java.util.zip.*;
 
 /** Versioned portable archive. Restore validates everything before merging missing items. */
 public final class VaultBackup {
-    private static final String[] TABLES={"Category","SavedItem","Tag","SavedItemTag","CachedMedia","MediaDownload"};
+    private static final String[] TABLES={"Category","SavedItem","Tag","SavedItemTag","CachedMedia","MediaDownload","Trash"};
     private static final int MANIFEST_LIMIT=32*1024*1024;
     private static final long ARCHIVE_LIMIT=4L*1024*1024*1024;
     private final Context context;
@@ -23,7 +23,7 @@ public final class VaultBackup {
         SQLiteDatabase db=repository.backupDatabase();
         db.beginTransaction(); // Keep rows and referenced files stable against concurrent capture/deletion.
         try(ZipOutputStream zip=new ZipOutputStream(new BufferedOutputStream(output))) {
-            JSONObject manifest=new JSONObject(); manifest.put("format","keepr"); manifest.put("version",1);
+            JSONObject manifest=new JSONObject(); manifest.put("format","keepr"); manifest.put("version",2);
             for(String table:TABLES) {
                 JSONArray rows=new JSONArray();
                 try(Cursor c=db.query(table,null,null,null,null,null,null)) {
@@ -65,7 +65,8 @@ public final class VaultBackup {
             if(entry==null || !entry.getName().equals("manifest.json")) throw new IOException("This is not a Keepr backup.");
             ByteArrayOutputStream manifestBytes=new ByteArrayOutputStream(); copy(zip,manifestBytes,MANIFEST_LIMIT);
             JSONObject manifest=new JSONObject(manifestBytes.toString(StandardCharsets.UTF_8.name()));
-            if(!manifest.getString("format").equals("keepr") || manifest.getInt("version")!=1) throw new IOException("Unsupported backup version.");
+            if(!manifest.getString("format").equals("keepr") || (manifest.getInt("version")<1 || manifest.getInt("version")>2)) throw new IOException("Unsupported backup version.");
+            if(manifest.getInt("version")==1) manifest.put("Trash",new JSONArray());
             // SQLite validates columns, required values, uniqueness, enums and foreign keys in isolation.
             for(String table:TABLES) {
                 Set<String> columns=new HashSet<>();
@@ -115,7 +116,7 @@ public final class VaultBackup {
                     if(!row.isNull("category_id")) values.put("category_id",folders.get(row.getString("category_id")));
                     target.insertOrThrow("SavedItem",null,values); accepted.add(id); added++;
                 }
-                for(String table:new String[]{"SavedItemTag","CachedMedia","MediaDownload"}) {
+                for(String table:new String[]{"SavedItemTag","CachedMedia","MediaDownload","Trash"}) {
                     JSONArray rows=manifest.getJSONArray(table);
                     for(int i=0;i<rows.length();i++) {
                         JSONObject row=rows.getJSONObject(i); if(!accepted.contains(row.getString("saved_item_id"))) continue;

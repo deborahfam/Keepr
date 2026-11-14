@@ -89,7 +89,7 @@ final class CollectionControls {
     private void showActions() {
         if(busy || selected.isEmpty()) return;
         dialog=new AlertDialog.Builder(activity).setTitle(selected.size()+" selected posts")
-            .setItems(new String[]{"Move to folder","Add tags","Archive","Delete"},(d,index)->{
+            .setItems(new String[]{"Move to folder","Add tags","Archive","Move to trash"},(d,index)->{
                 List<String> ids=new ArrayList<>(selected);
                 SQLiteSavedItemRepository.BulkAction action=SQLiteSavedItemRepository.BulkAction.values()[index];
                 if(action==SQLiteSavedItemRepository.BulkAction.MOVE) {
@@ -101,15 +101,16 @@ final class CollectionControls {
                 } else if(action==SQLiteSavedItemRepository.BulkAction.ADD_TAGS) {
                     LinearLayout form=form(); EditText tags=field(form,"Tags to add (comma separated)",""); dialog(form,"Add tags","Add tags",()->runBulk(ids,action,tags.getText().toString()));
                 } else {
-                    dialog=new AlertDialog.Builder(activity).setTitle((index==2?"Archive ":"Delete ")+ids.size()+" posts?")
-                        .setMessage(index==2?"The posts and photos will stay saved. Find them with the Archived status filter.":"These posts and their saved photos will be permanently deleted.")
-                        .setNegativeButton(android.R.string.cancel,null).setPositiveButton(index==2?"Archive":"Delete",(confirm,which)->runBulk(ids,action,"")).show();
+                    dialog=new AlertDialog.Builder(activity).setTitle((index==2?"Archive ":"Move to trash ")+ids.size()+" posts?")
+                        .setMessage(index==2?"The posts and photos will stay saved. Find them with the Archived status filter.":"These posts and photos can be restored from Trash until their retention period ends.")
+                        .setNegativeButton(android.R.string.cancel,null).setPositiveButton(index==2?"Archive":"Move to trash",(confirm,which)->runBulk(ids,action,"")).show();
                 }
             }).setNegativeButton(android.R.string.cancel,null).show();
     }
     private void runBulk(List<String> ids,SQLiteSavedItemRepository.BulkAction action,String value) {
         run(()->{
-            int changed=repository.bulk(ids,action,value);
+            int changed;
+            if(action==SQLiteSavedItemRepository.BulkAction.DELETE) { repository.trash(ids); changed=ids.size(); } else changed=repository.bulk(ids,action,value);
             if(action==SQLiteSavedItemRepository.BulkAction.DELETE) for(String id:ids) androidx.work.WorkManager.getInstance(activity.getApplicationContext()).cancelUniqueWork("snapshot-"+id);
             return changed+" posts updated";
         },()->{ selected.clear(); selecting=false; });

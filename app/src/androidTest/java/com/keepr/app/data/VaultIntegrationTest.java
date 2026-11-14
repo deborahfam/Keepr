@@ -147,7 +147,7 @@ public class VaultIntegrationTest {
                 try (android.database.Cursor cursor=helper.getReadableDatabase().rawQuery("SELECT title,shared_text,title_edited FROM SavedItem WHERE id='existing'",null)) {
                     assertTrue(cursor.moveToFirst()); assertEquals("Keep me",cursor.getString(0)); assertEquals("",cursor.getString(1)); assertEquals(0,cursor.getInt(2));
                 }
-                assertEquals(5,helper.getReadableDatabase().getVersion());
+                assertEquals(6,helper.getReadableDatabase().getVersion());
             }
         } finally { context.deleteDatabase(name); }
     }

@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 /** Versioned relational schema. Category and tag membership are separate concerns. */
 public final class VaultDatabase extends SQLiteOpenHelper {
     public VaultDatabase(Context context) { this(context,"keepr.db"); }
-    public VaultDatabase(Context context, String databaseName) { super(context.getApplicationContext(), databaseName, null, 5); }
+    public VaultDatabase(Context context, String databaseName) { super(context.getApplicationContext(), databaseName, null, 6); }
     @Override public void onConfigure(SQLiteDatabase db) { db.setForeignKeyConstraintsEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE Category (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL UNIQUE COLLATE NOCASE, created_at INTEGER NOT NULL)");
@@ -19,10 +19,12 @@ public final class VaultDatabase extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE SavedItemTag (saved_item_id TEXT NOT NULL REFERENCES SavedItem(id) ON DELETE CASCADE, tag_id TEXT NOT NULL REFERENCES Tag(id) ON DELETE CASCADE, PRIMARY KEY(saved_item_id, tag_id))");
         db.execSQL("CREATE INDEX item_tag_tag ON SavedItemTag(tag_id)");
         createPhotoQueue(db);
+        createTrash(db);
         String[] defaults = {"Real Estate", "Electronics", "Vehicles", "Jobs", "Marketplace", "Rentals", "Social", "Other"};
         for (String name : defaults) db.execSQL("INSERT INTO Category VALUES (?, ?, ?)", new Object[]{name, name, System.currentTimeMillis()});
     }
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion < 6) createTrash(db);
         if (oldVersion < 2) db.execSQL("ALTER TABLE SavedItem ADD COLUMN shared_text TEXT NOT NULL DEFAULT ''");
         if (oldVersion < 3) createPhotoQueue(db);
         if (oldVersion < 5) db.execSQL("ALTER TABLE SavedItem ADD COLUMN title_edited INTEGER NOT NULL DEFAULT 0");
@@ -30,6 +32,9 @@ public final class VaultDatabase extends SQLiteOpenHelper {
             db.execSQL("ALTER TABLE SavedItem ADD COLUMN expected_photos INTEGER NOT NULL DEFAULT 0");
             db.execSQL("ALTER TABLE SavedItem ADD COLUMN capture_version INTEGER NOT NULL DEFAULT 0");
         }
+    }
+    private void createTrash(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE Trash (saved_item_id TEXT PRIMARY KEY NOT NULL REFERENCES SavedItem(id) ON DELETE CASCADE, deleted_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)");
     }
     private void createPhotoQueue(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE MediaDownload (saved_item_id TEXT NOT NULL REFERENCES SavedItem(id) ON DELETE CASCADE, source_url TEXT NOT NULL, position INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'PENDING' CHECK(state IN ('PENDING','DOWNLOADED','FAILED')), attempts INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '', PRIMARY KEY(saved_item_id,source_url))");

@@ -39,6 +39,7 @@ public final class SnapshotWorker extends Worker {
                 repository.applyPreview(id,preview); repository.planPhotos(id,preview.imageUrls()); repository.finishPhotoDiscovery(id);
             }
             for(String image:repository.pendingPhotos(id)) {
+                if(repository.find(id)==null) return Result.success();
                 if(isStopped() || System.nanoTime()>deadline) break;
                 CachedMedia media=null;
                 try {

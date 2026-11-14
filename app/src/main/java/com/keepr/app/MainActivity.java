@@ -69,12 +69,14 @@ public final class MainActivity extends Activity {
         store = new SQLiteSavedItemRepository(this);
         collectionControls=new CollectionControls(this,(SQLiteSavedItemRepository)store,databaseWorker,this::renderCards,this::reloadCollection,
                 (oldName,newName)->{ if(category.equals(oldName)) category=newName; },state);
+        com.keepr.app.data.TrashWorker.schedule(this);
         buildScreen();
         databaseWorker.execute(() -> {
             try {
                 store.observe(snapshot -> runOnUiThread(() -> {
                     if (!isDestroyed()) { links.clear(); links.addAll(snapshot); renderCards(); }
                 }));
+                ((SQLiteSavedItemRepository)store).purgeExpired();
                 List<SavedItem> loaded = store.load();
                 List<String> savedFolders = store.folders();
                 for (SavedItem item : loaded) if (!item.url().isEmpty() && (item.previewState() == SavedItem.PreviewState.PENDING || store.needsPhotoDiscovery(item.id()))) SnapshotWorker.enqueue(this,item.id());
@@ -224,6 +226,7 @@ public final class MainActivity extends Activity {
         Button backup=button(getString(R.string.backup_restore),false);
         backup.setOnClickListener(v->startActivity(new Intent(this,BackupActivity.class)));
         dock.addView(backup,new LinearLayout.LayoutParams(-1,dp(48)));
+        Button trash=button("Trash",false); trash.setOnClickListener(v->startActivity(new Intent(this,TrashActivity.class))); dock.addView(trash);
         root.addView(dock); setContentView(root); renderCards();
     }
 
@@ -303,8 +306,7 @@ public final class MainActivity extends Activity {
             }
             card.addView(label(StatusLabels.label(this,link.status()),12,accent));
             if (!link.tags().isEmpty()) card.addView(label("#" + String.join("  #",link.tags()),12,accent));
-            if (link.previewState() == SavedItem.PreviewState.PENDING) card.addView(label("Saved · fetching available text and photos…",12,muted));
-            else if (link.media().isEmpty()) card.addView(label("Saved locally · no photos available",12,muted));
+            card.addView(label(link.captureSummary(),12,muted));
             if (!link.notes().isEmpty()) {
                 TextView notes = label(link.notes(), 14, ink); notes.setPadding(dp(12), dp(10), dp(12), dp(10));
                 notes.setBackground(surface(canvas, 10, 0)); card.addView(notes);
@@ -341,12 +343,12 @@ public final class MainActivity extends Activity {
     }
 
     private void confirmDelete(SavedItem link) {
-        new AlertDialog.Builder(this).setTitle("Delete saved link?").setMessage(link.title())
-            .setNegativeButton("Cancel", null).setPositiveButton("Delete", (d, which) -> {
+        new AlertDialog.Builder(this).setTitle("Move to trash?").setMessage(link.title()+"\n\nRecover this post and its photos from Trash before its retention period ends.")
+            .setNegativeButton("Cancel", null).setPositiveButton("Move to trash", (d, which) -> {
                 if (!storageHealthy) return;
                 androidx.work.WorkManager.getInstance(this).cancelUniqueWork("snapshot-"+link.id());
                 databaseWorker.execute(() -> {
-                    try { store.delete(link.id()); }
+                    try { ((SQLiteSavedItemRepository)store).trash(java.util.List.of(link.id())); }
                     catch (Exception e) { runOnUiThread(() -> Toast.makeText(this, "Could not delete link", Toast.LENGTH_LONG).show()); }
                 });
             }).show();
