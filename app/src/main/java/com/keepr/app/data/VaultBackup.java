@@ -147,8 +147,8 @@ public final class VaultBackup {
             try(Cursor c=db.query(table,new String[]{"id"},"name=? COLLATE NOCASE",new String[]{name},null,null,null)) {
                 if(c.moveToFirst()) id=c.getString(0);
                 else {
-                    // Folder IDs are displayed by the current UI, so use the name whenever possible.
-                    id=table.equals("Category")?name:UUID.randomUUID().toString();
+                    // Names are resolved separately from stable IDs.
+                    id=UUID.randomUUID().toString();
                     ContentValues values=values(row); values.put("id",id); db.insertOrThrow(table,null,values);
                 }
             }

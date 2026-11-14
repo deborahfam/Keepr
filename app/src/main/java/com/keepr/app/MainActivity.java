@@ -45,6 +45,7 @@ public final class MainActivity extends Activity {
     private String category = "All", query = "";
     private SavedItem.Status statusFilter;
     private AlertDialog duplicateDialog;
+    private CollectionControls collectionControls;
     private boolean storageHealthy = false;
     private boolean resumedOnce;
     private final int ink = Color.rgb(39, 34, 59);
@@ -66,6 +67,8 @@ public final class MainActivity extends Activity {
             String status=state.getString("filter_status"); if(status!=null) try { statusFilter=SavedItem.Status.valueOf(status); } catch(IllegalArgumentException ignored) { }
         }
         store = new SQLiteSavedItemRepository(this);
+        collectionControls=new CollectionControls(this,(SQLiteSavedItemRepository)store,databaseWorker,this::renderCards,this::reloadCollection,
+                (oldName,newName)->{ if(category.equals(oldName)) category=newName; },state);
         buildScreen();
         databaseWorker.execute(() -> {
             try {
@@ -125,6 +128,9 @@ public final class MainActivity extends Activity {
         super.onResume();
         if(!resumedOnce) { resumedOnce=true; return; }
         if(store==null) return;
+        reloadCollection();
+    }
+    private void reloadCollection() {
         databaseWorker.execute(()->{
             try {
                 List<SavedItem> refreshed=store.load(); List<String> savedFolders=store.folders();
@@ -206,6 +212,7 @@ public final class MainActivity extends Activity {
             public void onItemSelected(AdapterView<?> parent,View view,int position,long id) { statusFilter=position==0?null:SavedItem.Status.values()[position-1]; renderCards(); }
             public void onNothingSelected(AdapterView<?> parent) { }
         });
+        collectionControls.install(content);
         cards = column(); content.addView(cards);
 
         LinearLayout dock = column(); dock.setPadding(dp(24), dp(10), dp(24), dp(12));
@@ -246,10 +253,7 @@ public final class MainActivity extends Activity {
     private void renderCards() {
         if (cards == null) return;
         cards.removeAllViews(); int shown = 0;
-        for (SavedItem link : links) {
-            String searchable = (link.title() + " " + link.url() + " " + link.notes() + " " + link.description() + " " + link.sharedText() + " " + String.join(" ",link.tags())).toLowerCase(Locale.ROOT);
-            if(statusFilter!=null && statusFilter!=link.status()) continue;
-            if ((!category.equals("All") && !category.equals(link.categoryId())) || !searchable.contains(query.toLowerCase(Locale.ROOT))) continue;
+        for (SavedItem link : collectionControls.filter(links,category,query,statusFilter,storageHealthy)) {
             shown++;
             String itemCategory = link.categoryId() == null ? "Other" : link.categoryId();
             int categoryColor = categoryColor(itemCategory);
@@ -258,6 +262,7 @@ public final class MainActivity extends Activity {
             card.setBackground(surface(Color.WHITE, 22, line));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.bottomMargin = dp(14);
             cards.addView(card, params);
+            collectionControls.addSelection(card,link);
 
             LinearLayout meta = new LinearLayout(this); meta.setGravity(android.view.Gravity.CENTER_VERTICAL);
             TextView symbol = label(categorySymbol(itemCategory), 18, categoryColor);
@@ -531,6 +536,7 @@ public final class MainActivity extends Activity {
             out.putStringArrayList("draft_attachments",uris);
         }
         out.putString("filter_folder",category); out.putString("filter_query",query); out.putString("filter_status",statusFilter==null?null:statusFilter.name());
+        collectionControls.save(out);
         super.onSaveInstanceState(out);
     }
 
@@ -540,6 +546,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         if (workUpdates!=null && workObserver!=null) workUpdates.removeObserver(workObserver);
+        if(collectionControls!=null) collectionControls.close();
         if(duplicateDialog!=null) duplicateDialog.dismiss();
         if(editor!=null) editor.dismiss();
         imageWorker.shutdownNow();

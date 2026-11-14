@@ -34,7 +34,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     private List<SavedItem> query(SQLiteDatabase db) { return query(db,null); }
     private List<SavedItem> query(SQLiteDatabase db,String itemId) {
         List<SavedItem> items = new ArrayList<>();
-        try (Cursor c = db.rawQuery("SELECT id,url,title,description,site_name,image_url,price,currency,contact,notes,category_id,status,preview_state,preview_error,created_at,updated_at,shared_text FROM SavedItem"+(itemId==null ? "" : " WHERE id=?")+" ORDER BY created_at DESC,id", itemId==null ? null : new String[]{itemId})) {
+        try (Cursor c = db.rawQuery("SELECT id,url,title,description,site_name,image_url,price,currency,contact,notes,(SELECT name FROM Category WHERE id=SavedItem.category_id),status,preview_state,preview_error,created_at,updated_at,shared_text FROM SavedItem"+(itemId==null ? "" : " WHERE id=?")+" ORDER BY created_at DESC,id", itemId==null ? null : new String[]{itemId})) {
             while (c.moveToNext()) items.add(new SavedItem(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
                     c.getString(4), c.getString(5), c.getString(6), c.getString(7), c.getString(8), c.getString(9),
                     c.getString(10), SavedItem.Status.valueOf(c.getString(11)), SavedItem.PreviewState.valueOf(c.getString(12)),
@@ -80,17 +80,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         emit();
     }
     private void insert(SQLiteDatabase db, SavedItem item) {
-        String folderId = item.categoryId();
-        if (folderId != null) {
-            try (Cursor existing = db.rawQuery("SELECT id FROM Category WHERE name=? COLLATE NOCASE", new String[]{folderId})) {
-                if (existing.moveToFirst()) folderId = existing.getString(0);
-                else {
-                    ContentValues category = new ContentValues(); category.put("id", folderId);
-                    category.put("name", folderId); category.put("created_at", item.createdAt());
-                    db.insertOrThrow("Category", null, category);
-                }
-            }
-        }
+        String folderId=item.categoryId()==null?null:ensureFolder(db,item.categoryId());
         ContentValues v = new ContentValues();
         v.put("id", item.id()); v.put("url", item.url()); v.put("title", item.title());
         v.put("description", item.description()); v.put("site_name", item.siteName()); v.put("image_url", item.imageUrl());
@@ -127,11 +117,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         List<String> normalized=com.keepr.app.domain.TagNames.parse(tagText);
         SQLiteDatabase db=helper.getWritableDatabase(); db.beginTransaction();
         try {
-            String folderId=folder;
-            try(Cursor c=db.rawQuery("SELECT id FROM Category WHERE name=? COLLATE NOCASE",new String[]{folder})) {
-                if(c.moveToFirst()) folderId=c.getString(0);
-                else { ContentValues v=new ContentValues(); v.put("id",folder); v.put("name",folder); v.put("created_at",System.currentTimeMillis()); db.insertOrThrow("Category",null,v); }
-            }
+            String folderId=ensureFolder(db,folder);
             ContentValues v=new ContentValues(); v.put("title",title); v.put("title_edited",1); v.put("notes",notes); v.put("category_id",folderId); v.put("updated_at",System.currentTimeMillis());
             if(db.update("SavedItem",v,"id=?",new String[]{id})!=1) throw new IllegalStateException("This post no longer exists.");
             db.delete("SavedItemTag","saved_item_id=?",new String[]{id});
@@ -139,6 +125,68 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
                 ContentValues tag=new ContentValues(); tag.put("id",java.util.UUID.randomUUID().toString()); tag.put("name",name);
                 db.insertWithOnConflict("Tag",null,tag,SQLiteDatabase.CONFLICT_IGNORE);
                 db.execSQL("INSERT INTO SavedItemTag SELECT ?,id FROM Tag WHERE name=? COLLATE NOCASE",new Object[]{id,name});
+            }
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+        emit();
+    }
+    private String ensureFolder(SQLiteDatabase db,String name) {
+        name=validFolder(name);
+        try(Cursor c=db.rawQuery("SELECT id FROM Category WHERE name=? COLLATE NOCASE",new String[]{name})) { if(c.moveToFirst()) return c.getString(0); }
+        String id=java.util.UUID.randomUUID().toString(); ContentValues values=new ContentValues(); values.put("id",id); values.put("name",name); values.put("created_at",System.currentTimeMillis());
+        db.insertOrThrow("Category",null,values); return id;
+    }
+    private String validFolder(String name) {
+        name=name.trim();
+        if(name.isEmpty() || name.length()>60 || name.equalsIgnoreCase("All")) throw new IllegalArgumentException("Use a folder name from 1 to 60 characters, other than All.");
+        return name;
+    }
+    public enum BulkAction { MOVE, ADD_TAGS, ARCHIVE, DELETE }
+    public int bulk(java.util.Collection<String> ids,BulkAction action,String value) {
+        java.util.Set<String> unique=new java.util.LinkedHashSet<>(ids);
+        if(unique.isEmpty()) throw new IllegalArgumentException("Select at least one post.");
+        List<String> addedTags=action==BulkAction.ADD_TAGS?com.keepr.app.domain.TagNames.parse(value):Collections.emptyList();
+        if(action==BulkAction.ADD_TAGS && addedTags.isEmpty()) throw new IllegalArgumentException("Enter at least one tag.");
+        List<CachedMedia> removed=new ArrayList<>(); SQLiteDatabase db=helper.getWritableDatabase(); db.beginTransaction();
+        try {
+            String folder=action==BulkAction.MOVE?ensureFolder(db,value):null;
+            for(String id:unique) {
+                try(Cursor c=db.rawQuery("SELECT 1 FROM SavedItem WHERE id=?",new String[]{id})) { if(!c.moveToFirst()) throw new IllegalStateException("A selected post no longer exists. Refresh and select again."); }
+                if(action==BulkAction.DELETE) { removed.addAll(media(db,id)); db.delete("SavedItem","id=?",new String[]{id}); continue; }
+                ContentValues values=new ContentValues(); values.put("updated_at",System.currentTimeMillis());
+                if(action==BulkAction.MOVE) values.put("category_id",folder);
+                if(action==BulkAction.ARCHIVE) values.put("status",SavedItem.Status.ARCHIVED.name());
+                if(action==BulkAction.ADD_TAGS) {
+                    List<String> combined=new ArrayList<>(tags(db,id)); combined.addAll(addedTags);
+                    com.keepr.app.domain.TagNames.parse(String.join(",",combined)); // Validate the union before committing any item.
+                    for(String tagName:addedTags) {
+                        ContentValues tag=new ContentValues(); tag.put("id",java.util.UUID.randomUUID().toString()); tag.put("name",tagName);
+                        db.insertWithOnConflict("Tag",null,tag,SQLiteDatabase.CONFLICT_IGNORE);
+                        db.execSQL("INSERT OR IGNORE INTO SavedItemTag SELECT ?,id FROM Tag WHERE name=? COLLATE NOCASE",new Object[]{id,tagName});
+                    }
+                }
+                db.update("SavedItem",values,"id=?",new String[]{id});
+            }
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+        for(CachedMedia file:removed) new java.io.File(context.getFilesDir(),file.relativePath()).delete();
+        emit(); return unique.size();
+    }
+    public void organizeFolder(String source,String destination,boolean merge) {
+        destination=validFolder(destination); SQLiteDatabase db=helper.getWritableDatabase(); db.beginTransaction();
+        try {
+            String sourceId;
+            try(Cursor c=db.rawQuery("SELECT id FROM Category WHERE name=? COLLATE NOCASE",new String[]{source})) { if(!c.moveToFirst()) throw new IllegalStateException("Folder no longer exists."); sourceId=c.getString(0); }
+            String targetId=null;
+            try(Cursor c=db.rawQuery("SELECT id FROM Category WHERE name=? COLLATE NOCASE",new String[]{destination})) { if(c.moveToFirst()) targetId=c.getString(0); }
+            if(merge) {
+                if(targetId==null || targetId.equals(sourceId)) throw new IllegalArgumentException("Choose a different existing destination folder.");
+                db.execSQL("UPDATE SavedItem SET category_id=?,updated_at=? WHERE category_id=?",new Object[]{targetId,System.currentTimeMillis(),sourceId});
+                db.delete("Category","id=?",new String[]{sourceId});
+            } else {
+                if(targetId!=null && !targetId.equals(sourceId)) throw new IllegalArgumentException("That folder already exists. Use Merge folders instead.");
+                ContentValues values=new ContentValues(); values.put("name",destination); db.update("Category",values,"id=?",new String[]{sourceId});
+                db.execSQL("UPDATE SavedItem SET updated_at=? WHERE category_id=?",new Object[]{System.currentTimeMillis(),sourceId});
             }
             db.setTransactionSuccessful();
         } finally { db.endTransaction(); }

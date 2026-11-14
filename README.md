@@ -49,6 +49,14 @@ Saving a URL already in the vault offers **Open existing**, **Update capture**, 
 
 **Update capture** retries missing photos and queues fresh public metadata/photo discovery after any existing capture completes. It retains the existing post and its local photos, notes, tags, folder, status, and edited title. Draft edits and newly shared photos are only saved with **Save another copy**; add photos to an existing post from its detail screen. Dismiss the duplicate prompt to return to the draft without saving.
 
+## Search, sorting, and bulk organization
+
+**Filters and sorting** adds exact tag and source filters plus a saved-date range (inclusive dates in the device’s time zone). These combine with search, folder, and tracking status. Choose newest first, oldest first, or price ascending/descending. Price sorting groups currencies alphabetically and sorts decimal amounts within each group; missing or unrecognized prices appear last. It does not convert currencies or guess the meaning of formatted price text. Filter choices survive screen recreation.
+
+Tap **Select posts**, check individual cards or **Select all results**, then choose **Actions** to move posts to a folder, add tags, archive, or delete. Adding tags preserves existing tags; a tag-limit violation rolls back the whole batch. Selection is limited to visible results, so changing filters removes hidden posts from the selection. Deletion asks for confirmation and permanently removes selected posts and their saved photos; archive keeps everything locally.
+
+**Manage folders** lets you rename a folder or merge it into another existing folder. Renaming preserves membership, and merging moves all source posts into the destination before removing the source folder. Names remain unique ignoring case. Folder IDs remain stable behind their display names; old backups and newly created folders still work after a rename.
+
 ## Architecture
 
 - `domain/`: immutable SavedItem, Category, CachedMedia models; tag normalization; SavedItemRepository interface.

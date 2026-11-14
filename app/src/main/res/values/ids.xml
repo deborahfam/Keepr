@@ -9,4 +9,7 @@
     <item name="zoom_photo_view" type="id" />
     <item name="status_filter" type="id" />
     <item name="change_status" type="id" />
+    <item name="collection_filters" type="id" />
+    <item name="collection_select" type="id" />
+    <item name="collection_actions" type="id" />
 </resources>
