@@ -43,6 +43,8 @@ public final class MainActivity extends Activity {
     private ArrayList<Uri> editorAttachments = new ArrayList<>();
     private Spinner editorCategory;
     private String category = "All", query = "";
+    private SavedItem.Status statusFilter;
+    private AlertDialog duplicateDialog;
     private boolean storageHealthy = false;
     private boolean resumedOnce;
     private final int ink = Color.rgb(39, 34, 59);
@@ -59,6 +61,10 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        if(state!=null) {
+            category=state.getString("filter_folder","All"); query=state.getString("filter_query","");
+            String status=state.getString("filter_status"); if(status!=null) try { statusFilter=SavedItem.Status.valueOf(status); } catch(IllegalArgumentException ignored) { }
+        }
         store = new SQLiteSavedItemRepository(this);
         buildScreen();
         databaseWorker.execute(() -> {
@@ -181,6 +187,7 @@ public final class MainActivity extends Activity {
         search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
         search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
         content.addView(search, new LinearLayout.LayoutParams(-1, dp(54)));
+        search.setText(query);
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) { query = s.toString(); renderCards(); }
@@ -190,6 +197,15 @@ public final class MainActivity extends Activity {
         filters.setPadding(0, dp(12), 0, dp(14));
         folderChips = new LinearLayout(this);
         filters.addView(folderChips); content.addView(filters); rebuildFolderChips();
+        Spinner statuses=new Spinner(this); statuses.setId(R.id.status_filter); statuses.setContentDescription(getString(R.string.status_filter));
+        List<String> labels=new ArrayList<>(); labels.add(getString(R.string.all_statuses)); labels.addAll(java.util.Arrays.asList(StatusLabels.choices(this)));
+        statuses.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels));
+        statuses.setSelection(statusFilter==null?0:statusFilter.ordinal()+1);
+        content.addView(statuses,new LinearLayout.LayoutParams(-1,dp(48)));
+        statuses.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(AdapterView<?> parent,View view,int position,long id) { statusFilter=position==0?null:SavedItem.Status.values()[position-1]; renderCards(); }
+            public void onNothingSelected(AdapterView<?> parent) { }
+        });
         cards = column(); content.addView(cards);
 
         LinearLayout dock = column(); dock.setPadding(dp(24), dp(10), dp(24), dp(12));
@@ -232,6 +248,7 @@ public final class MainActivity extends Activity {
         cards.removeAllViews(); int shown = 0;
         for (SavedItem link : links) {
             String searchable = (link.title() + " " + link.url() + " " + link.notes() + " " + link.description() + " " + link.sharedText() + " " + String.join(" ",link.tags())).toLowerCase(Locale.ROOT);
+            if(statusFilter!=null && statusFilter!=link.status()) continue;
             if ((!category.equals("All") && !category.equals(link.categoryId())) || !searchable.contains(query.toLowerCase(Locale.ROOT))) continue;
             shown++;
             String itemCategory = link.categoryId() == null ? "Other" : link.categoryId();
@@ -279,6 +296,7 @@ public final class MainActivity extends Activity {
                 TextView description = label(caption, 14, muted); description.setLineSpacing(dp(3), 1);
                 description.setMaxLines(4); description.setEllipsize(android.text.TextUtils.TruncateAt.END); card.addView(description);
             }
+            card.addView(label(StatusLabels.label(this,link.status()),12,accent));
             if (!link.tags().isEmpty()) card.addView(label("#" + String.join("  #",link.tags()),12,accent));
             if (link.previewState() == SavedItem.PreviewState.PENDING) card.addView(label("Saved · fetching available text and photos…",12,muted));
             else if (link.media().isEmpty()) card.addView(label("Saved locally · no photos available",12,muted));
@@ -292,8 +310,7 @@ public final class MainActivity extends Activity {
                 TextView price = badge((link.currency() + " " + link.price()).trim(), categoryColor, tint);
                 footer.addView(price, new LinearLayout.LayoutParams(0, -2, 1));
             } else {
-                String status = link.status().name().replace('_', ' ').toLowerCase(Locale.ROOT);
-                TextView state = label("•  " + status.substring(0, 1).toUpperCase(Locale.ROOT) + status.substring(1), 12, muted);
+                TextView state = label("Saved offline", 12, muted);
                 footer.addView(state, new LinearLayout.LayoutParams(0, -2, 1));
             }
             Button open = button(getString(R.string.view_saved_post), false);
@@ -312,7 +329,7 @@ public final class MainActivity extends Activity {
             empty.addView(icon, new LinearLayout.LayoutParams(dp(64), dp(64)));
             TextView title = label(links.isEmpty() ? "Make room for a good find." : "Nothing here just yet.", 20, ink);
             title.setGravity(android.view.Gravity.CENTER); title.setTypeface(null, Typeface.BOLD); empty.addView(title);
-            TextView explanation = label(links.isEmpty() ? "Found something you love? Save its link here, or share it to Keepr from another app." : "Try a different search or explore another category.", 14, muted);
+            TextView explanation = label(links.isEmpty() ? "Found something you love? Save its link here, or share it to Keepr from another app." : "Try a different search, folder, or status.", 14, muted);
             explanation.setGravity(android.view.Gravity.CENTER); explanation.setLineSpacing(dp(3), 1); empty.addView(explanation);
             cards.addView(empty);
         }
@@ -333,6 +350,7 @@ public final class MainActivity extends Activity {
     private void showEditor(String sharedUrl) { showEditor(sharedUrl,"",new ArrayList<>(),false); }
 
     private void showEditor(String sharedUrl, String sharedText, ArrayList<Uri> attachments, boolean automatic) {
+        if (duplicateDialog != null) duplicateDialog.dismiss();
         if (editor != null) editor.dismiss();
         editorSharedText = sharedText; editorAttachments = new ArrayList<>(attachments);
         LinearLayout form = column(); form.setPadding(dp(24), dp(8), dp(24), dp(16));
@@ -411,7 +429,7 @@ public final class MainActivity extends Activity {
                 String folder=categories.getSelectedItem().toString();
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false); dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);
                 dialog.setCancelable(false);
-                databaseWorker.execute(() -> {
+                Runnable saveCopy=() -> databaseWorker.execute(() -> {
                     List<CachedMedia> copied = new ArrayList<>(); int failed=0;
                     try {
                         for (Uri uri : attachments) {
@@ -436,11 +454,47 @@ public final class MainActivity extends Activity {
                         } });
                     }
                 });
+                checkDuplicate(normalized,dialog,saveCopy);
             } catch (IllegalArgumentException e) { Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show(); }
         }));
         editor=dialog; editorUrl=url; editorTitle=title; editorNotes=notes; editorText=text; editorTags=tags; editorCategory=categories;
         dialog.show();
         if (automatic && !sharedUrl.isEmpty()) fetch.performClick();
+    }
+
+    private void unlockEditor(AlertDialog dialog) {
+        dialog.setCancelable(true); dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true); dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(true);
+    }
+    private void checkDuplicate(String url,AlertDialog dialog,Runnable saveCopy) {
+        if(url.isEmpty()) { saveCopy.run(); return; }
+        databaseWorker.execute(()->{
+            try {
+                SavedItem existing=((SQLiteSavedItemRepository)store).findDuplicate(url);
+                runOnUiThread(()->{
+                    if(isDestroyed() || !dialog.isShowing()) return;
+                    if(existing==null) { saveCopy.run(); return; }
+                    unlockEditor(dialog);
+                    duplicateDialog=new AlertDialog.Builder(this).setTitle(R.string.already_saved)
+                        .setMessage(getString(R.string.duplicate_explanation,existing.title()))
+                        .setNeutralButton(R.string.open_existing,(d,w)->{ dialog.dismiss(); showSavedPost(existing); })
+                        .setNegativeButton(R.string.update_capture,(d,w)->{
+                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false); dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false); dialog.setCancelable(false);
+                            databaseWorker.execute(()->{
+                                try {
+                                    SQLiteSavedItemRepository repository=(SQLiteSavedItemRepository)store;
+                                    if(repository.find(existing.id())==null) throw new IllegalStateException("Saved post no longer exists");
+                                    repository.retryPhotos(existing.id()); SnapshotWorker.refresh(this,existing.id());
+                                    runOnUiThread(()->{ if(!isDestroyed()) { dialog.dismiss(); Toast.makeText(this,R.string.capture_queued,Toast.LENGTH_SHORT).show(); showSavedPost(existing); } });
+                                } catch(Exception error) { runOnUiThread(()->{ if(!isDestroyed()) { unlockEditor(dialog); Toast.makeText(this,"Could not queue capture. Please try again.",Toast.LENGTH_LONG).show(); } }); }
+                            });
+                        })
+                        .setPositiveButton(R.string.save_another_copy,(d,w)->{
+                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false); dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false); dialog.setCancelable(false); saveCopy.run();
+                        }).create();
+                    duplicateDialog.show();
+                });
+            } catch(Exception error) { runOnUiThread(()->{ if(!isDestroyed()) { unlockEditor(dialog); Toast.makeText(this,"Could not check existing posts. Please try again.",Toast.LENGTH_LONG).show(); } }); }
+        });
     }
 
     private ImageView photo(CachedMedia media, int height) {
@@ -476,6 +530,7 @@ public final class MainActivity extends Activity {
             ArrayList<String> uris=new ArrayList<>(); for (Uri uri : editorAttachments) uris.add(uri.toString());
             out.putStringArrayList("draft_attachments",uris);
         }
+        out.putString("filter_folder",category); out.putString("filter_query",query); out.putString("filter_status",statusFilter==null?null:statusFilter.name());
         super.onSaveInstanceState(out);
     }
 
@@ -485,6 +540,8 @@ public final class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         if (workUpdates!=null && workObserver!=null) workUpdates.removeObserver(workObserver);
+        if(duplicateDialog!=null) duplicateDialog.dismiss();
+        if(editor!=null) editor.dismiss();
         imageWorker.shutdownNow();
         previewWorker.shutdownNow();
         databaseWorker.execute(store::close);

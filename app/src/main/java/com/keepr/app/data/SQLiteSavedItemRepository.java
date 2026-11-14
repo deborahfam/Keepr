@@ -100,6 +100,24 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         v.put("created_at", item.createdAt()); v.put("updated_at", item.updatedAt());
         db.insertOrThrow("SavedItem", null, v);
     }
+    public void setStatus(String id, SavedItem.Status status) {
+        java.util.Objects.requireNonNull(status);
+        ContentValues values=new ContentValues(); values.put("status",status.name()); values.put("updated_at",System.currentTimeMillis());
+        if(helper.getWritableDatabase().update("SavedItem",values,"id=?",new String[]{id})!=1) throw new IllegalStateException("This post no longer exists.");
+        emit();
+    }
+    /** Compare normalized full URLs; retain queries and fragments to avoid conflating distinct posts. */
+    public SavedItem findDuplicate(String url) {
+        if(url==null || url.isEmpty()) return null;
+        String normalized=UrlExtractor.normalize(url);
+        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT id,url FROM SavedItem ORDER BY created_at DESC,id",null)) {
+            while(c.moveToNext()) {
+                try { if(normalized.equals(UrlExtractor.normalize(c.getString(1)))) return find(c.getString(0)); }
+                catch(IllegalArgumentException ignored) { /* Legacy text-only or invalid source. */ }
+            }
+        }
+        return null;
+    }
     SQLiteDatabase backupDatabase() { return helper.getWritableDatabase(); }
     public void edit(String id, String title, String notes, String folder, String tagText) {
         title=title.trim(); folder=folder.trim();

@@ -7,4 +7,6 @@
     <item name="detail_tab_photos" type="id" />
     <item name="detail_tab_info" type="id" />
     <item name="zoom_photo_view" type="id" />
+    <item name="status_filter" type="id" />
+    <item name="change_status" type="id" />
 </resources>

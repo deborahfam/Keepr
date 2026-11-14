@@ -16,6 +16,14 @@ public final class SnapshotWorker extends Worker {
                 .addTag("keepr-snapshot").build();
         WorkManager.getInstance(context).enqueueUniqueWork("snapshot-"+itemId,ExistingWorkPolicy.KEEP,work);
     }
+    /** Run a fresh discovery after any active capture finishes, including when it failed. */
+    public static void refresh(Context context,String itemId) {
+        OneTimeWorkRequest work=new OneTimeWorkRequest.Builder(SnapshotWorker.class)
+                .setInputData(new Data.Builder().putString("item_id",itemId).putBoolean("refresh",true).build())
+                .setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setBackoffCriteria(BackoffPolicy.LINEAR,10,TimeUnit.SECONDS).addTag("keepr-snapshot").build();
+        WorkManager.getInstance(context).enqueueUniqueWork("snapshot-"+itemId,ExistingWorkPolicy.APPEND_OR_REPLACE,work);
+    }
     public SnapshotWorker(Context context,WorkerParameters params) { super(context,params); }
     @Override public Result doWork() {
         String id=getInputData().getString("item_id"); if(id==null) return Result.failure();
@@ -23,6 +31,7 @@ public final class SnapshotWorker extends Worker {
         long deadline=System.nanoTime()+TimeUnit.MINUTES.toNanos(2);
         try {
             SavedItem item=repository.find(id); if(item==null) return Result.success();
+            if(getInputData().getBoolean("refresh",false) && getRunAttemptCount()==0) repository.retryPhotos(id);
             MetadataService service=new MetadataService();
             if(repository.needsPhotoDiscovery(id) || !repository.hasPhotoPlan(id)) {
                 PreviewMetadata preview=service.fetch(item.url());

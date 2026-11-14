@@ -37,4 +37,20 @@
     <string name="edit_folder">Folder (choose or type a new name)</string>
     <string name="edit_tags">Tags (comma separated)</string>
     <string name="save_changes">Save changes</string>
+    <string name="all_statuses">All statuses</string>
+    <string name="status_active">Active</string>
+    <string name="status_reached_out">Reached out</string>
+    <string name="status_purchased">Purchased</string>
+    <string name="status_archived">Archived</string>
+    <string name="change_status">Change status</string>
+    <string name="status_filter">Filter by tracking status</string>
+    <string name="already_saved">This link is already saved</string>
+    <string name="duplicate_explanation">%1$s
+
+Open the most recently saved copy, retry its public capture, or save a separate copy with this draft. Updating capture preserves saved notes, tags, folder, status, and edited title; draft changes and newly shared photos are only used when saving another copy.</string>
+    <string name="open_existing">Open existing</string>
+    <string name="update_capture">Update capture</string>
+    <string name="save_another_copy">Save another copy</string>
+    <string name="capture_queued">Capture update queued</string>
+    <string name="status_saved">Status updated</string>
 </resources>

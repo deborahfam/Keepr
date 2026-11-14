@@ -32,7 +32,7 @@ public final class PostDetailActivity extends Activity {
     private LiveData<List<WorkInfo>> updates;
     private androidx.lifecycle.Observer<List<WorkInfo>> observer;
     private Dialog photoDialog;
-    private AlertDialog editDialog;
+    private AlertDialog editDialog,statusDialog;
     private EditText editTitle,editNotes,editTags;
     private AutoCompleteTextView editFolder;
     private Bundle pendingEdit;
@@ -112,6 +112,8 @@ public final class PostDetailActivity extends Activity {
             section("Source",item.siteName().isEmpty() ? "Shared content" : item.siteName());
             section("Original link",item.url()); section("Capture notes",item.previewError());
         }
+        Button changeStatus=button(getString(R.string.change_status)+": "+StatusLabels.label(this,item.status()),false);
+        changeStatus.setId(R.id.change_status); body.addView(changeStatus,block()); changeStatus.setOnClickListener(v->showStatusPicker());
         Button edit=button(getString(R.string.edit_post),false); body.addView(edit,block());
         edit.setOnClickListener(v->showEdit(null));
         Button addPhotos=button(getString(R.string.add_photos),false); body.addView(addPhotos,block());
@@ -128,6 +130,20 @@ public final class PostDetailActivity extends Activity {
                 repository.retryPhotos(id); SnapshotWorker.enqueue(this,id); runOnUiThread(this::reload);
             }); });
         }
+    }
+    private void showStatusPicker() {
+        int[] selected={item.status().ordinal()};
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(R.string.change_status)
+                .setSingleChoiceItems(StatusLabels.choices(this),selected[0],(d,which)->selected[0]=which)
+                .setNegativeButton(android.R.string.cancel,null).setPositiveButton(R.string.save_changes,null).create();
+        statusDialog=dialog;
+        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            SavedItem.Status status=SavedItem.Status.values()[selected[0]]; dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            database.execute(()->{
+                try { repository.setStatus(id,status); runOnUiThread(()->{ if(!isDestroyed()) { dialog.dismiss(); reload(); Toast.makeText(this,R.string.status_saved,Toast.LENGTH_SHORT).show(); } }); }
+                catch(Exception error) { runOnUiThread(()->{ if(!isDestroyed()) { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true); Toast.makeText(this,"Could not update status. Please try again.",Toast.LENGTH_LONG).show(); } }); }
+            });
+        })); dialog.show();
     }
     private void showEdit(Bundle draft) {
         if(item==null || (editDialog!=null && editDialog.isShowing())) return;
@@ -272,7 +288,7 @@ public final class PostDetailActivity extends Activity {
         TextView caption=text(name.toUpperCase(Locale.ROOT),11,purple); caption.setTypeface(null,Typeface.BOLD); caption.setPadding(0,dp(22),0,dp(6)); body.addView(caption);
         TextView content=text(value,16,ink); content.setTextIsSelectable(true); content.setLineSpacing(dp(3),1); body.addView(content);
     }
-    private String status(SavedItem.Status status) { String value=status.name().replace('_',' ').toLowerCase(Locale.ROOT); return value.substring(0,1).toUpperCase(Locale.ROOT)+value.substring(1); }
+    private String status(SavedItem.Status status) { return StatusLabels.label(this,status); }
     private LinearLayout column() { LinearLayout result=new LinearLayout(this); result.setOrientation(LinearLayout.VERTICAL); return result; }
     private TextView text(String value,int size,int color) { TextView view=new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(color); view.setPadding(0,dp(6),0,dp(6)); return view; }
     private GradientDrawable shape(int color,int radius) { GradientDrawable drawable=new GradientDrawable(); drawable.setColor(color); drawable.setCornerRadius(dp(radius)); return drawable; }
@@ -287,5 +303,5 @@ public final class PostDetailActivity extends Activity {
         state.putBoolean("editing",true); state.putString("edit_title",editTitle.getText().toString()); state.putString("edit_notes",editNotes.getText().toString());
         state.putString("edit_folder",editFolder.getText().toString()); state.putString("edit_tags",editTags.getText().toString());
     } state.putInt("photo",photoIndex); state.putString("tab",tab); super.onSaveInstanceState(state); }
-    @Override protected void onDestroy() { if(editDialog!=null) editDialog.dismiss(); if(photoDialog!=null) { photoDialog.setOnDismissListener(null); photoDialog.dismiss(); } if(updates!=null && observer!=null) updates.removeObserver(observer); images.shutdownNow(); if(repository!=null) { database.execute(repository::close); database.shutdown(); } super.onDestroy(); }
+    @Override protected void onDestroy() { if(statusDialog!=null) statusDialog.dismiss(); if(editDialog!=null) editDialog.dismiss(); if(photoDialog!=null) { photoDialog.setOnDismissListener(null); photoDialog.dismiss(); } if(updates!=null && observer!=null) updates.removeObserver(observer); images.shutdownNow(); if(repository!=null) { database.execute(repository::close); database.shutdown(); } super.onDestroy(); }
 }
