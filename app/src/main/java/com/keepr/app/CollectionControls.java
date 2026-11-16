@@ -22,8 +22,9 @@ final class CollectionControls {
     private boolean selecting,busy;
     private final Set<String> selected=new LinkedHashSet<>();
     private List<SavedItem> all=List.of(),visible=List.of();
-    private LinearLayout selectionBar;
+    private LinearLayout selectionBar,toolsPanel;
     private Button selectionButton,actions;
+    private Spinner statusChoice;
     private TextView summary;
     private AlertDialog dialog;
 
@@ -35,17 +36,26 @@ final class CollectionControls {
             selecting=state.getBoolean("collection_selecting"); ArrayList<String> ids=state.getStringArrayList("collection_selected"); if(ids!=null) selected.addAll(ids);
         }
     }
-    void install(LinearLayout parent) {
-        Button filters=button("Filters and sorting",this::showFilters); filters.setId(R.id.collection_filters); parent.addView(filters);
-        summary=new TextView(activity); parent.addView(summary);
-        LinearLayout tools=new LinearLayout(activity);
-        selectionButton=button("Select posts",()->{ selecting=!selecting; selected.clear(); render.run(); }); selectionButton.setId(R.id.collection_select);
-        tools.addView(selectionButton,new LinearLayout.LayoutParams(0,-2,1)); tools.addView(button("Manage folders",this::showFolders),new LinearLayout.LayoutParams(0,-2,1)); parent.addView(tools);
+    void install(LinearLayout parent, Spinner statuses) {
+        statusChoice=statuses;
+        toolsPanel=form();
+        toolsPanel.addView(statuses,new LinearLayout.LayoutParams(-1,-2));
+        Button advanced=button("Tags, sources, dates & sort",()->{ if(dialog!=null) dialog.dismiss(); showFilters(); });
+        advanced.setId(R.id.collection_filters); toolsPanel.addView(advanced);
+        summary=UiStyles.text(activity,"",12,UiStyles.MUTED); toolsPanel.addView(summary);
+        selectionButton=button("Done",this::toggleSelection); selectionButton.setId(R.id.collection_select);
         selectionBar=new LinearLayout(activity);
+        selectionBar.addView(selectionButton);
         selectionBar.addView(button("Select all results",()->{ for(SavedItem item:visible) selected.add(item.id()); render.run(); }),new LinearLayout.LayoutParams(0,-2,1));
         actions=button("Actions",this::showActions); actions.setId(R.id.collection_actions); selectionBar.addView(actions,new LinearLayout.LayoutParams(0,-2,1)); parent.addView(selectionBar);
         update();
     }
+    void showTools() {
+        if(toolsPanel.getParent()!=null) ((android.view.ViewGroup)toolsPanel.getParent()).removeView(toolsPanel);
+        dialog=new AlertDialog.Builder(activity).setTitle("Filters and sorting").setView(toolsPanel).setPositiveButton("Done",null).show();
+    }
+    void toggleSelection() { if(busy) return; selecting=!selecting; selected.clear(); render.run(); }
+    boolean hasFilters() { return !tag.isEmpty() || !source.isEmpty() || !from.isEmpty() || !through.isEmpty(); }
     List<SavedItem> filter(List<SavedItem> items,String folder,String query,SavedItem.Status status,boolean loaded) {
         all=new ArrayList<>(items); visible=CollectionQuery.apply(items,folder,query,status,tag,source,bound(from,false),bound(through,true),sort);
         if(loaded) { Set<String> ids=new HashSet<>(); for(SavedItem item:visible) ids.add(item.id()); selected.retainAll(ids); }
@@ -60,7 +70,7 @@ final class CollectionControls {
         if(summary==null) return;
         String[] sorts={"Newest first","Oldest first","Price: low to high (by currency)","Price: high to low (by currency)"};
         summary.setText(sorts[sort.ordinal()]+(tag.isEmpty()?"":" · #"+tag)+(source.isEmpty()?"":" · "+source)+(from.isEmpty()?"":" · from "+from)+(through.isEmpty()?"":" · through "+through));
-        selectionButton.setText(selecting?"Done selecting":"Select posts"); selectionButton.setEnabled(!busy);
+        selectionButton.setText("Done"); selectionButton.setEnabled(!busy);
         selectionBar.setVisibility(selecting?android.view.View.VISIBLE:android.view.View.GONE);
         actions.setText(selected.size()+" selected · Actions"); actions.setEnabled(!busy && !selected.isEmpty());
     }
@@ -115,7 +125,7 @@ final class CollectionControls {
             return changed+" posts updated";
         },()->{ selected.clear(); selecting=false; });
     }
-    private void showFolders() {
+    void showFolders() {
         if(busy) return;
         worker.execute(()->{ List<String> folders=repository.folders(); activity.runOnUiThread(()->{ if(activity.isDestroyed()) return;
             dialog=new AlertDialog.Builder(activity).setTitle("Manage folders").setItems(folders.toArray(new String[0]),(d,index)->{
@@ -146,7 +156,7 @@ final class CollectionControls {
         });
     }
     private LinearLayout form() { LinearLayout form=new LinearLayout(activity); form.setOrientation(LinearLayout.VERTICAL); int pad=(int)(20*activity.getResources().getDisplayMetrics().density); form.setPadding(pad,pad,pad,pad); return form; }
-    private Button button(String label,Runnable action) { Button button=new Button(activity); button.setText(label); button.setAllCaps(false); button.setOnClickListener(v->action.run()); return button; }
+    private Button button(String label,Runnable action) { Button button=UiStyles.button(activity,label,false); button.setOnClickListener(v->action.run()); return button; }
     private EditText field(LinearLayout form,String label,String value) { TextView caption=new TextView(activity); caption.setText(label); form.addView(caption); EditText input=new EditText(activity); input.setSingleLine(true); input.setText(value); input.setContentDescription(label); form.addView(input); return input; }
     private Spinner choices(LinearLayout form,String label,List<String> options,String chosen,String any) {
         TextView caption=new TextView(activity); caption.setText(label); form.addView(caption); List<String> values=new ArrayList<>(options); if(!chosen.isEmpty()) addUnique(values,chosen); if(any!=null) values.add(0,any);
@@ -159,5 +169,6 @@ final class CollectionControls {
     }
     private void toast(String text) { Toast.makeText(activity,text,Toast.LENGTH_LONG).show(); }
     void save(Bundle state) { state.putString("collection_tag",tag); state.putString("collection_source",source); state.putString("collection_from",from); state.putString("collection_through",through); state.putString("collection_sort",sort.name()); state.putBoolean("collection_selecting",selecting); state.putStringArrayList("collection_selected",new ArrayList<>(selected)); }
+    void reset() { tag=""; source=""; from=""; through=""; sort=CollectionQuery.Sort.NEWEST; }
     void close() { if(dialog!=null) dialog.dismiss(); }
 }

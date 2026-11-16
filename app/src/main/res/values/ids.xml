@@ -12,4 +12,8 @@
     <item name="collection_filters" type="id" />
     <item name="collection_select" type="id" />
     <item name="collection_actions" type="id" />
+    <item name="view_cards" type="id" />
+    <item name="view_list" type="id" />
+    <item name="collection_items" type="id" />
+    <item name="collection_refine" type="id" />
 </resources>

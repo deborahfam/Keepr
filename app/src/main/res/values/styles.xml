@@ -1,9 +1,13 @@
 <resources>
-    <style name="Theme.Keepr" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.Keepr" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:colorBackground">#171518</item>
+        <item name="android:textColorPrimary">#F3EDE8</item>
+        <item name="android:textColorSecondary">#B9AEB4</item>
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#6648CA</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:navigationBarColor">#F8F6F2</item>
-        <item name="android:windowBackground">#F8F6F2</item>
+        <item name="android:colorAccent">#E57585</item>
+        <item name="android:colorControlNormal">#B9AEB4</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">#171518</item>
+        <item name="android:windowBackground">#171518</item>
     </style>
 </resources>

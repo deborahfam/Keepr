@@ -39,6 +39,10 @@ public final class MainActivity extends Activity {
     private TextView count;
     private AlertDialog editor;
     private EditText editorUrl, editorTitle, editorNotes, editorText, editorTags;
+    private EditText search;
+    private Spinner statuses;
+    private boolean listView;
+    private Button cardViewButton, listViewButton;
     private String editorSharedText = "";
     private ArrayList<Uri> editorAttachments = new ArrayList<>();
     private Spinner editorCategory;
@@ -48,11 +52,11 @@ public final class MainActivity extends Activity {
     private CollectionControls collectionControls;
     private boolean storageHealthy = false;
     private boolean resumedOnce;
-    private final int ink = Color.rgb(39, 34, 59);
-    private final int muted = Color.rgb(107, 101, 122);
-    private final int accent = Color.rgb(102, 72, 202);
-    private final int canvas = Color.rgb(248, 246, 242);
-    private final int line = Color.rgb(228, 223, 235);
+    private final int ink = UiStyles.INK;
+    private final int muted = UiStyles.MUTED;
+    private final int accent = UiStyles.ACCENT;
+    private final int canvas = UiStyles.PAPER;
+    private final int line = UiStyles.LINE;
     private final List<String> folders = new ArrayList<>(java.util.Arrays.asList(CATEGORIES));
     private LinearLayout folderChips;
     private final ExecutorService imageWorker = Executors.newFixedThreadPool(2);
@@ -62,6 +66,7 @@ public final class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        listView = getSharedPreferences("appearance", MODE_PRIVATE).getBoolean("list_view", false);
         if(state!=null) {
             category=state.getString("filter_folder","All"); query=state.getString("filter_query","");
             String status=state.getString("filter_status"); if(status!=null) try { statusFilter=SavedItem.Status.valueOf(status); } catch(IllegalArgumentException ignored) { }
@@ -152,81 +157,102 @@ public final class MainActivity extends Activity {
 
         LinearLayout brand = new LinearLayout(this); brand.setGravity(android.view.Gravity.CENTER_VERTICAL);
         brand.setPadding(dp(24), dp(12), dp(24), dp(12));
-        TextView mark = label("k", 25, Color.WHITE); mark.setGravity(android.view.Gravity.CENTER);
-        mark.setTypeface(Typeface.create("sans-serif-black", Typeface.BOLD));
-        mark.setBackground(surface(accent, 14, 0));
-        brand.addView(mark, new LinearLayout.LayoutParams(dp(44), dp(44)));
-        TextView name = label("keepr", 26, ink); name.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        ImageView mark = new ImageView(this); mark.setImageResource(R.drawable.ic_keepr);
+        mark.setBackground(surface(accent, 14, 0)); mark.setClipToOutline(true);
+        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        brand.addView(mark, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        TextView name = label("keepr", 23, ink); name.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1); nameParams.leftMargin = dp(10);
         brand.addView(name, nameParams);
-        TextView privacy = badge("ON YOUR DEVICE", accent, Color.rgb(235, 229, 252));
-        brand.addView(privacy); root.addView(brand);
+        Button menuButton = button("⋯", false); menuButton.setTextSize(24);
+        menuButton.setContentDescription("Collection options");
+        menuButton.setBackground(interactive(canvas, 14, 0));
+        brand.addView(menuButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        menuButton.setOnClickListener(v -> {
+            PopupMenu menu = new PopupMenu(this, menuButton);
+            menu.getMenu().add("Filters and sorting").setOnMenuItemClickListener(item -> { collectionControls.showTools(); return true; });
+            menu.getMenu().add("Select posts").setOnMenuItemClickListener(item -> { collectionControls.toggleSelection(); return true; });
+            menu.getMenu().add("Clear search and filters").setOnMenuItemClickListener(item -> {
+                query=""; statusFilter=null; collectionControls.reset(); search.setText(""); statuses.setSelection(0); renderCards(); return true;
+            });
+            menu.getMenu().add("Manage folders").setOnMenuItemClickListener(item -> { collectionControls.showFolders(); return true; });
+            menu.getMenu().add(R.string.backup_restore).setOnMenuItemClickListener(item -> { startActivity(new Intent(this, BackupActivity.class)); return true; });
+            menu.getMenu().add("Trash").setOnMenuItemClickListener(item -> { startActivity(new Intent(this, TrashActivity.class)); return true; });
+            menu.show();
+        });
+        root.addView(brand);
 
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setClipToPadding(false);
-        LinearLayout content = column(); content.setPadding(dp(24), dp(8), dp(24), dp(20));
+        LinearLayout content = column(); content.setPadding(dp(20), 0, dp(20), dp(24));
         scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-
-        LinearLayout hero = column(); hero.setPadding(dp(24), dp(20), dp(24), dp(22));
-        GradientDrawable gradient = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                new int[]{Color.rgb(47, 38, 73), Color.rgb(83, 59, 119)});
-        gradient.setCornerRadius(dp(24)); hero.setBackground(gradient);
-        TextView eyebrow = label("GOOD FINDS, SAFE KEEPING", 11, Color.rgb(221, 203, 255));
-        eyebrow.setLetterSpacing(0.12f); hero.addView(eyebrow);
-        TextView heading = label("Keep a little\npossibility.", 32, Color.WHITE);
-        heading.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        heading.setLineSpacing(0, 1.02f); hero.addView(heading);
-        TextView subtitle = label("The places, deals, and ideas you want to come back to.", 15, Color.rgb(231, 222, 244));
-        subtitle.setLineSpacing(dp(3), 1); hero.addView(subtitle);
-        content.addView(hero);
-
-        LinearLayout collectionHeading = new LinearLayout(this);
-        collectionHeading.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        collectionHeading.setPadding(0, dp(22), 0, dp(8));
-        TextView collection = label("Your collection", 23, ink); collection.setTypeface(null, Typeface.BOLD);
-        collectionHeading.addView(collection, new LinearLayout.LayoutParams(0, -2, 1));
-        count = badge("", accent, Color.rgb(235, 229, 252)); collectionHeading.addView(count);
-        content.addView(collectionHeading);
-
-        EditText search = new EditText(this); search.setSingleLine(true);
+        LinearLayout searchRow = new LinearLayout(this); searchRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        searchRow.setBackground(surface(UiStyles.SURFACE, 16, line));
+        search = new EditText(this); search.setSingleLine(true);
         search.setHint(R.string.search_finds); search.setTextSize(15); search.setTextColor(ink); search.setHintTextColor(muted);
-        search.setPadding(dp(16), dp(12), dp(16), dp(12)); search.setBackground(surface(Color.WHITE, 16, line));
+        search.setPadding(dp(16), dp(12), dp(16), dp(12)); search.setBackground(surface(UiStyles.SURFACE, 16, line));
         search.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_search, 0, 0, 0);
         search.setCompoundDrawablePadding(dp(10));
         search.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
         search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
-        content.addView(search, new LinearLayout.LayoutParams(-1, dp(54)));
+        search.setBackgroundColor(Color.TRANSPARENT);
+        search.setContentDescription("Search titles, text, notes and tags");
+        searchRow.addView(search, new LinearLayout.LayoutParams(0, -2, 1)); search.setMinHeight(dp(54));
+        Button clearSearch = button("×", false); clearSearch.setTextSize(22);
+        clearSearch.setContentDescription("Clear search"); clearSearch.setBackground(interactive(UiStyles.SURFACE, 16, 0));
+        clearSearch.setVisibility(query.isEmpty() ? View.GONE : View.VISIBLE);
+        clearSearch.setOnClickListener(v -> search.setText(""));
+        searchRow.addView(clearSearch, new LinearLayout.LayoutParams(dp(48), dp(48))); content.addView(searchRow);
+        search.setOnEditorActionListener((v, action, event) -> {
+            if (action != android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) return false;
+            ((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(search.getWindowToken(), 0);
+            search.clearFocus(); return true;
+        });
         search.setText(query);
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            public void onTextChanged(CharSequence s, int start, int before, int count) { query = s.toString(); renderCards(); }
+            public void onTextChanged(CharSequence s, int start, int before, int count) { query = s.toString(); clearSearch.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE); renderCards(); }
             public void afterTextChanged(Editable e) {}
         });
         HorizontalScrollView filters = new HorizontalScrollView(this); filters.setHorizontalScrollBarEnabled(false);
-        filters.setPadding(0, dp(12), 0, dp(14));
+        filters.setPadding(0, dp(8), 0, dp(6));
         folderChips = new LinearLayout(this);
         filters.addView(folderChips); content.addView(filters); rebuildFolderChips();
-        Spinner statuses=new Spinner(this); statuses.setId(R.id.status_filter); statuses.setContentDescription(getString(R.string.status_filter));
+        statuses=new Spinner(this); statuses.setId(R.id.status_filter); statuses.setContentDescription(getString(R.string.status_filter));
         List<String> labels=new ArrayList<>(); labels.add(getString(R.string.all_statuses)); labels.addAll(java.util.Arrays.asList(StatusLabels.choices(this)));
         statuses.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels));
         statuses.setSelection(statusFilter==null?0:statusFilter.ordinal()+1);
-        content.addView(statuses,new LinearLayout.LayoutParams(-1,dp(48)));
+        statuses.setMinimumHeight(dp(48));
+
         statuses.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             public void onItemSelected(AdapterView<?> parent,View view,int position,long id) { statusFilter=position==0?null:SavedItem.Status.values()[position-1]; renderCards(); }
             public void onNothingSelected(AdapterView<?> parent) { }
         });
-        collectionControls.install(content);
-        cards = column(); content.addView(cards);
+        collectionControls.install(content, statuses);
+        LinearLayout collectionHeading = new LinearLayout(this);
+        collectionHeading.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        collectionHeading.setPadding(0, dp(14), 0, dp(14));
+        count = label("", 16, ink); count.setTypeface(null, Typeface.BOLD);
+        collectionHeading.addView(count, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout viewChoices = new LinearLayout(this);
+        viewChoices.setPadding(dp(3), dp(3), dp(3), dp(3));
+        viewChoices.setBackground(surface(UiStyles.SURFACE, 14, line));
+        cardViewButton = button("Cards", false); cardViewButton.setId(R.id.view_cards);
+        listViewButton = button("List", false); listViewButton.setId(R.id.view_list);
+        cardViewButton.setContentDescription("Card view"); listViewButton.setContentDescription("List view");
+        viewChoices.addView(cardViewButton); viewChoices.addView(listViewButton);
+        cardViewButton.setOnClickListener(v -> changeView(false)); listViewButton.setOnClickListener(v -> changeView(true));
+        collectionHeading.addView(viewChoices); updateViewButtons();
+        content.addView(collectionHeading);
+        cards = column(); cards.setId(R.id.collection_items); content.addView(cards);
 
         LinearLayout dock = column(); dock.setPadding(dp(24), dp(10), dp(24), dp(12));
         dock.setBackground(surface(canvas, 0, 0));
+        dock.setElevation(dp(2));
         Button add = button(getString(R.string.save_link), true);
         add.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_add, 0, 0, 0);
         add.setCompoundDrawablePadding(dp(10));
-        add.setOnClickListener(v -> showEditor("")); dock.addView(add, new LinearLayout.LayoutParams(-1, dp(56)));
-        Button backup=button(getString(R.string.backup_restore),false);
-        backup.setOnClickListener(v->startActivity(new Intent(this,BackupActivity.class)));
-        dock.addView(backup,new LinearLayout.LayoutParams(-1,dp(48)));
-        Button trash=button("Trash",false); trash.setOnClickListener(v->startActivity(new Intent(this,TrashActivity.class))); dock.addView(trash);
+        add.setOnClickListener(v -> showEditor("")); add.setMinHeight(dp(56)); dock.addView(add, new LinearLayout.LayoutParams(-1, -2));
+
         root.addView(dock); setContentView(root); renderCards();
     }
 
@@ -248,7 +274,7 @@ public final class MainActivity extends Activity {
         for (Button chip : categoryButtons) {
             boolean selected = category.equals(chip.getTag());
             chip.setSelected(selected); chip.setTextColor(selected ? Color.WHITE : muted);
-            chip.setBackground(interactive(selected ? accent : Color.WHITE, 24, selected ? 0 : line));
+            chip.setBackground(interactive(selected ? accent : UiStyles.SURFACE, 24, selected ? 0 : line));
             chip.setTypeface(null, selected ? Typeface.BOLD : Typeface.NORMAL);
         }
     }
@@ -258,88 +284,119 @@ public final class MainActivity extends Activity {
         cards.removeAllViews(); int shown = 0;
         for (SavedItem link : collectionControls.filter(links,category,query,statusFilter,storageHealthy)) {
             shown++;
-            String itemCategory = link.categoryId() == null ? "Other" : link.categoryId();
-            int categoryColor = categoryColor(itemCategory);
-            int tint = categoryTint(itemCategory);
-            LinearLayout card = column(); card.setPadding(dp(18), dp(18), dp(18), dp(16));
-            card.setBackground(surface(Color.WHITE, 22, line));
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.bottomMargin = dp(14);
-            cards.addView(card, params);
-            collectionControls.addSelection(card,link);
-
-            LinearLayout meta = new LinearLayout(this); meta.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            TextView symbol = label(categorySymbol(itemCategory), 18, categoryColor);
-            symbol.setGravity(android.view.Gravity.CENTER); symbol.setTypeface(null, Typeface.BOLD);
-            symbol.setBackground(surface(tint, 12, 0));
-            meta.addView(symbol, new LinearLayout.LayoutParams(dp(42), dp(42)));
-            LinearLayout source = column();
-            TextView categoryLabel = label(itemCategory, 12, categoryColor); categoryLabel.setTypeface(null, Typeface.BOLD);
-            categoryLabel.setPadding(0, 0, 0, dp(3)); source.addView(categoryLabel);
-            String host = Uri.parse(link.url()).getHost();
-            TextView domain = label(host == null ? "Shared post" : host.replaceFirst("^www\\.", ""), 12, muted);
-            domain.setPadding(0, 0, 0, 0); domain.setSingleLine(true);
-            domain.setEllipsize(android.text.TextUtils.TruncateAt.END); source.addView(domain);
-            LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, -2, 1); sp.leftMargin = dp(10);
-            meta.addView(source, sp);
-            Button more = button("⋯", false); more.setTextSize(22); more.setContentDescription(getString(R.string.item_options, link.title()));
-            more.setBackground(interactive(Color.WHITE, 12, 0));
-            meta.addView(more, new LinearLayout.LayoutParams(dp(48), dp(48)));
-            more.setOnClickListener(v -> {
-                PopupMenu menu = new PopupMenu(this, more);
-                menu.getMenu().add(R.string.delete_link).setOnMenuItemClickListener(item -> { confirmDelete(link); return true; });
-                menu.show();
-            });
-            card.addView(meta);
-            if (!link.media().isEmpty()) {
-                ImageView photo = photo(link.media().get(0), 190);
-                LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(-1,dp(190)); pp.topMargin = dp(14);
-                card.addView(photo,pp); photo.setOnClickListener(v -> showSavedPost(link));
-                photo.setContentDescription(getString(R.string.view_saved_photos, link.media().size()));
-                card.addView(label(getString(R.string.photos_saved_count,link.media().size()),12,accent));
-            }
-            TextView title = label(link.title(), 21, ink); title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            title.setPadding(0, dp(14), 0, dp(6)); card.addView(title);
-            String caption = !link.description().isEmpty() ? link.description() : link.sharedText();
-            if (!caption.isEmpty()) {
-                TextView description = label(caption, 14, muted); description.setLineSpacing(dp(3), 1);
-                description.setMaxLines(4); description.setEllipsize(android.text.TextUtils.TruncateAt.END); card.addView(description);
-            }
-            card.addView(label(StatusLabels.label(this,link.status()),12,accent));
-            if (!link.tags().isEmpty()) card.addView(label("#" + String.join("  #",link.tags()),12,accent));
-            card.addView(label(link.captureSummary(),12,muted));
-            if (!link.notes().isEmpty()) {
-                TextView notes = label(link.notes(), 14, ink); notes.setPadding(dp(12), dp(10), dp(12), dp(10));
-                notes.setBackground(surface(canvas, 10, 0)); card.addView(notes);
-            }
-            LinearLayout footer = new LinearLayout(this); footer.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            footer.setPadding(0, dp(14), 0, 0);
-            if (!link.price().isEmpty()) {
-                TextView price = badge((link.currency() + " " + link.price()).trim(), categoryColor, tint);
-                footer.addView(price, new LinearLayout.LayoutParams(0, -2, 1));
-            } else {
-                TextView state = label("Saved offline", 12, muted);
-                footer.addView(state, new LinearLayout.LayoutParams(0, -2, 1));
-            }
-            Button open = button(getString(R.string.view_saved_post), false);
-            open.setOnClickListener(v -> showSavedPost(link));
-            LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(-2, dp(48)); op.leftMargin = dp(10);
-            footer.addView(open, op); card.addView(footer);
+            cards.addView(savedItemView(link));
         }
-        count.setText(String.valueOf(shown));
+        count.setText(shown + (shown == 1 ? " saved find" : " saved finds") + ((!query.isEmpty() || statusFilter!=null || collectionControls.hasFilters()) ? " · filtered" : ""));
         count.setContentDescription(getResources().getQuantityString(R.plurals.saved_count, shown, shown));
         if (shown == 0) {
             LinearLayout empty = column(); empty.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
             empty.setPadding(dp(24), dp(28), dp(24), dp(30));
-            empty.setBackground(surface(Color.WHITE, 22, line));
-            TextView icon = label("↗", 28, accent); icon.setGravity(android.view.Gravity.CENTER);
-            icon.setBackground(surface(Color.rgb(239, 233, 253), 20, 0));
-            empty.addView(icon, new LinearLayout.LayoutParams(dp(64), dp(64)));
-            TextView title = label(links.isEmpty() ? "Make room for a good find." : "Nothing here just yet.", 20, ink);
-            title.setGravity(android.view.Gravity.CENTER); title.setTypeface(null, Typeface.BOLD); empty.addView(title);
-            TextView explanation = label(links.isEmpty() ? "Found something you love? Save its link here, or share it to Keepr from another app." : "Try a different search, folder, or status.", 14, muted);
+            empty.setBackground(surface(UiStyles.SURFACE, 22, line));
+            ImageView illustration = new ImageView(this); illustration.setImageResource(R.drawable.empty_collection);
+            illustration.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            empty.addView(illustration, new LinearLayout.LayoutParams(dp(160), dp(110)));
+            TextView title = label(!storageHealthy ? "Opening your collection…" : links.isEmpty() ? "Keep something good." : "No matching finds", 20, ink);
+            title.setGravity(android.view.Gravity.CENTER); title.setTypeface(Typeface.create("serif", Typeface.NORMAL)); title.setTextSize(26); empty.addView(title);
+            TextView explanation = label(!storageHealthy ? "Your saved posts will appear here." : links.isEmpty() ? "Tap Save a new find to keep a link. You can also share text and photos to Keepr from another app." : "Try another search or clear your filters to see your collection.", 14, muted);
             explanation.setGravity(android.view.Gravity.CENTER); explanation.setLineSpacing(dp(3), 1); empty.addView(explanation);
+            if (storageHealthy && !links.isEmpty()) {
+                Button reset = button("Clear search and filters", false);
+                reset.setOnClickListener(v -> { category = "All"; statusFilter = null; query = "";
+                    collectionControls.reset(); search.setText(""); statuses.setSelection(0); updateFilters(); renderCards(); });
+                LinearLayout.LayoutParams resetParams = new LinearLayout.LayoutParams(-1, -2); resetParams.topMargin = dp(16);
+                empty.addView(reset, resetParams);
+            }
             cards.addView(empty);
         }
+    }
+
+    private void changeView(boolean compact) {
+        if (listView == compact) return;
+        listView = compact;
+        getSharedPreferences("appearance", MODE_PRIVATE).edit().putBoolean("list_view", compact).apply();
+        updateViewButtons(); renderCards();
+    }
+
+    private void updateViewButtons() {
+        for (Button choice : new Button[]{cardViewButton, listViewButton}) {
+            boolean selected = choice == (listView ? listViewButton : cardViewButton);
+            choice.setSelected(selected);
+            choice.setTextColor(selected ? Color.WHITE : muted);
+            choice.setBackground(interactive(selected ? accent : UiStyles.SURFACE, 11, 0));
+            choice.setTextSize(13);
+        }
+    }
+
+    private LinearLayout savedItemView(SavedItem item) {
+        LinearLayout card = column(); card.setTag(listView ? "list" : "cards");
+        card.setPadding(dp(14), dp(14), dp(14), dp(14));
+        card.setBackground(surface(UiStyles.SURFACE, 20, line));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.bottomMargin = dp(12);
+        card.setLayoutParams(params); collectionControls.addSelection(card, item);
+        String folder = item.categoryId() == null ? "Other" : item.categoryId();
+        if (listView) {
+            LinearLayout row = new LinearLayout(this); row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            LinearLayout openArea = new LinearLayout(this); openArea.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            openArea.setBackground(interactive(UiStyles.SURFACE, 12, 0));
+            openArea.setOnClickListener(v -> showSavedPost(item));
+            openArea.setContentDescription(getString(R.string.view_saved_post) + ": " + item.title());
+            View thumbnail;
+            if (item.media().isEmpty()) {
+                TextView placeholder = label(categorySymbol(folder), 24, categoryColor(folder));
+                placeholder.setGravity(android.view.Gravity.CENTER); placeholder.setBackground(surface(categoryTint(folder), 12, 0)); thumbnail = placeholder;
+            } else thumbnail = photo(item.media().get(0), 72);
+            thumbnail.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            openArea.addView(thumbnail, new LinearLayout.LayoutParams(dp(72), dp(72)));
+            LinearLayout text = column(); text.setPadding(dp(12), 0, dp(4), 0);
+            TextView title = itemTitle(item, 16); title.setPadding(0, 0, 0, dp(4)); text.addView(title);
+            TextView category = label(folder + " · " + StatusLabels.label(this, item.status()), 12, muted);
+            category.setMaxLines(2); category.setEllipsize(android.text.TextUtils.TruncateAt.END); text.addView(category);
+            if (!item.price().isEmpty()) text.addView(label((item.currency() + " " + item.price()).trim(), 15, ink));
+            TextView capture = label(item.captureSummary(), 11, muted); capture.setMaxLines(2); text.addView(capture);
+            openArea.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
+            row.addView(openArea, new LinearLayout.LayoutParams(0, -2, 1)); row.addView(itemMenu(item),new LinearLayout.LayoutParams(dp(48),dp(48)));
+            card.addView(row); return card;
+        }
+        if (!item.media().isEmpty()) {
+            ImageView cover = photo(item.media().get(0), 160);
+            LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(-1, dp(160)); coverParams.bottomMargin = dp(10);
+            card.addView(cover, coverParams); cover.setOnClickListener(v -> showSavedPost(item));
+            cover.setContentDescription(getString(R.string.view_saved_photos, item.media().size()));
+        }
+        LinearLayout header = new LinearLayout(this); header.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView category = label(folder, 12, categoryColor(folder)); category.setMaxLines(2); category.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        header.addView(category,new LinearLayout.LayoutParams(0,-2,1)); header.addView(itemMenu(item),new LinearLayout.LayoutParams(dp(48),dp(48))); card.addView(header);
+        TextView title = itemTitle(item, 20); card.addView(title);
+        String caption = item.description().isEmpty() ? item.sharedText() : item.description();
+        if (!caption.isEmpty()) {
+            TextView description = label(caption,14,muted); description.setMaxLines(2);
+            description.setEllipsize(android.text.TextUtils.TruncateAt.END); description.setLineSpacing(dp(2),1); card.addView(description);
+        }
+        LinearLayout stateRow = new LinearLayout(this); stateRow.setGravity(android.view.Gravity.CENTER_VERTICAL); stateRow.setPadding(0,dp(8),0,dp(8));
+        stateRow.addView(badge(StatusLabels.label(this,item.status()),UiStyles.ACCENT_TEXT,UiStyles.SOFT));
+        TextView capture=label(item.captureSummary(),11,muted); capture.setPadding(dp(10),0,0,0); capture.setMaxLines(2);
+        stateRow.addView(capture,new LinearLayout.LayoutParams(0,-2,1)); card.addView(stateRow);
+        View divider = new View(this); divider.setBackgroundColor(line); card.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));
+        LinearLayout footer = new LinearLayout(this); footer.setGravity(android.view.Gravity.CENTER_VERTICAL); footer.setPadding(0,dp(6),0,0);
+        TextView price=label(item.price().isEmpty()?"Saved on your device":(item.currency()+" "+item.price()).trim(),item.price().isEmpty()?12:18,item.price().isEmpty()?muted:ink);
+        price.setMaxLines(2); price.setEllipsize(android.text.TextUtils.TruncateAt.END); footer.addView(price,new LinearLayout.LayoutParams(0,-2,1));
+        Button open=button("Open  →",false); open.setBackground(interactive(UiStyles.SURFACE,12,0));
+        open.setContentDescription(getString(R.string.view_saved_post)+": "+item.title()); open.setOnClickListener(v->showSavedPost(item));
+        footer.addView(open); card.addView(footer); return card;
+    }
+
+    private TextView itemTitle(SavedItem item, int size) {
+        TextView title=label(item.title(),size,ink); title.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
+        title.setMaxLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END); return title;
+    }
+
+    private Button itemMenu(SavedItem item) {
+        Button more=button("⋯",false); more.setTextSize(22);
+        more.setContentDescription(getString(R.string.item_options,item.title())); more.setBackground(interactive(UiStyles.SURFACE,12,0));
+        more.setOnClickListener(v->{ PopupMenu menu=new PopupMenu(this,more);
+            menu.getMenu().add(R.string.view_saved_post).setOnMenuItemClickListener(option->{ showSavedPost(item); return true; });
+            menu.getMenu().add("Move to trash").setOnMenuItemClickListener(option->{ confirmDelete(item); return true; }); menu.show(); });
+        return more;
     }
 
     private void confirmDelete(SavedItem link) {
@@ -388,7 +445,7 @@ public final class MainActivity extends Activity {
         EditText tags = field(form,"Tags (comma separated, e.g. apartment, wishlist)");
         EditText text = field(form,"Post text / caption"); text.setSingleLine(false); text.setMinLines(3);
         text.setText(sharedText);
-        if (!attachments.isEmpty()) form.addView(label(attachments.size()+" shared photo(s) will be copied for offline viewing.",13,accent));
+        if (!attachments.isEmpty()) form.addView(label(attachments.size()+" shared photo(s) will be copied for offline viewing.",13,UiStyles.ACCENT_TEXT));
         PreviewMetadata[] preview = {null};
         String[] previewUrl = {""};
         TextView previewStatus = label("Keepr will fetch available public text and photos after saving. Some sites only expose a link.",13,muted); form.addView(previewStatus);
@@ -609,17 +666,11 @@ public final class MainActivity extends Activity {
         if (stroke != 0) shape.setStroke(dp(1), stroke); return shape;
     }
     private android.graphics.drawable.RippleDrawable interactive(int fill, int radius, int stroke) {
-        return new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x226648CA),
-                surface(fill, radius, stroke), surface(Color.WHITE, radius, 0));
+        return new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33FF98A5),
+                surface(fill, radius, stroke), surface(UiStyles.SURFACE, radius, 0));
     }
     private Button button(String text, boolean primary) {
-        Button button = new Button(this); button.setText(text); button.setAllCaps(false);
-        button.setTextSize(15); button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        button.setTextColor(primary ? Color.WHITE : accent);
-        button.setBackground(interactive(primary ? accent : Color.rgb(242, 237, 254), 14, 0));
-        button.setPadding(dp(16), 0, dp(16), 0); button.setMinWidth(0); button.setMinimumWidth(0);
-        button.setMinHeight(dp(48)); button.setMinimumHeight(dp(48)); button.setStateListAnimator(null);
-        return button;
+        return UiStyles.button(this, text, primary);
     }
     private TextView badge(String text, int foreground, int background) {
         TextView badge = label(text, 10, foreground); badge.setTypeface(null, Typeface.BOLD);
@@ -627,20 +678,20 @@ public final class MainActivity extends Activity {
     }
     private int categoryColor(String category) {
         switch (category) {
-            case "Real Estate": case "Rentals": return Color.rgb(145, 72, 47);
-            case "Electronics": return Color.rgb(48, 88, 151);
-            case "Vehicles": return Color.rgb(41, 110, 96);
-            case "Jobs": return Color.rgb(141, 93, 23);
-            default: return accent;
+            case "Real Estate": case "Rentals": return 0xffEFB09D;
+            case "Electronics": return 0xffB3C4E8;
+            case "Vehicles": return 0xffACCCBC;
+            case "Jobs": return 0xffDEC391;
+            default: return UiStyles.ACCENT_TEXT;
         }
     }
     private int categoryTint(String category) {
         switch (category) {
-            case "Real Estate": case "Rentals": return Color.rgb(251, 232, 221);
-            case "Electronics": return Color.rgb(229, 237, 253);
-            case "Vehicles": return Color.rgb(223, 242, 235);
-            case "Jobs": return Color.rgb(251, 240, 211);
-            default: return Color.rgb(239, 233, 253);
+            case "Real Estate": case "Rentals": return 0xff44302C;
+            case "Electronics": return 0xff2D3446;
+            case "Vehicles": return 0xff293C33;
+            case "Jobs": return 0xff40382A;
+            default: return UiStyles.SOFT;
         }
     }
     private String categorySymbol(String category) {

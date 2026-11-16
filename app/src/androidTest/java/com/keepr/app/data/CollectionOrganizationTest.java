@@ -71,13 +71,55 @@ public class CollectionOrganizationTest {
                 scenario.recreate(); awaitLoaded(scenario);
                 scenario.onActivity(activity->{
                     assertTrue(((Set<?>)field(field(activity,"collectionControls"),"selected")).contains(id));
-                    ((android.widget.Spinner)activity.findViewById(R.id.status_filter)).setSelection(SavedItem.Status.ARCHIVED.ordinal()+1);
+                    try { Object controls=field(activity,"collectionControls"); java.lang.reflect.Method show=controls.getClass().getDeclaredMethod("showTools"); show.setAccessible(true); show.invoke(controls); }
+                    catch(Exception error) { throw new AssertionError(error); }
+                });
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                scenario.onActivity(activity->{
+                    ((android.widget.Spinner)field(activity,"statuses")).setSelection(SavedItem.Status.ARCHIVED.ordinal()+1);
                 });
                 InstrumentationRegistry.getInstrumentation().waitForIdleSync();
                 scenario.onActivity(activity->assertTrue(((Set<?>)field(field(activity,"collectionControls"),"selected")).isEmpty()));
             } finally { repo.delete(id); }
         }
     }
+    @Test public void viewChoicePersistsAndPreservesSelectionAndFilters() throws Exception {
+        String id=UUID.randomUUID().toString();
+        var preferences=context.getSharedPreferences("appearance",Context.MODE_PRIVATE);
+        boolean previous=preferences.getBoolean("list_view",false);
+        preferences.edit().putBoolean("list_view",false).commit();
+        try(SQLiteSavedItemRepository repo=new SQLiteSavedItemRepository(context)) {
+            repo.add(item(id,"Other",List.of()));
+            try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
+                awaitLoaded(scenario);
+                scenario.onActivity(activity->{
+                    ((android.widget.EditText)field(activity,"search")).setText(id);
+                    activity.findViewById(R.id.collection_select).performClick();
+                    ((Set<String>)field(field(activity,"collectionControls"),"selected")).add(id);
+                    activity.findViewById(R.id.view_list).performClick();
+                    android.widget.LinearLayout rows=activity.findViewById(R.id.collection_items);
+                    assertEquals(1,rows.getChildCount()); assertEquals("list",rows.getChildAt(0).getTag());
+                    assertTrue(activity.findViewById(R.id.view_list).isSelected());
+                    assertTrue(((Set<?>)field(field(activity,"collectionControls"),"selected")).contains(id));
+                });
+                scenario.recreate(); awaitLoaded(scenario);
+                scenario.onActivity(activity->{
+                    assertTrue(activity.findViewById(R.id.view_list).isSelected());
+                    assertEquals(id,((android.widget.EditText)field(activity,"search")).getText().toString());
+                    assertTrue(((Set<?>)field(field(activity,"collectionControls"),"selected")).contains(id));
+                    activity.findViewById(R.id.view_cards).performClick();
+                    android.widget.LinearLayout rows=activity.findViewById(R.id.collection_items);
+                    assertEquals(1,rows.getChildCount()); assertEquals("cards",rows.getChildAt(0).getTag());
+                    assertTrue(activity.findViewById(R.id.view_cards).isSelected());
+                    activity.findViewById(R.id.view_list).performClick();
+                });
+            }
+            try(ActivityScenario<MainActivity> reopened=ActivityScenario.launch(MainActivity.class)) {
+                awaitLoaded(reopened); reopened.onActivity(activity->assertTrue(activity.findViewById(R.id.view_list).isSelected()));
+            } finally { repo.delete(id); }
+        } finally { preferences.edit().putBoolean("list_view",previous).commit(); }
+    }
+
     private void awaitLoaded(ActivityScenario<MainActivity> scenario) {
         java.util.concurrent.atomic.AtomicBoolean ready=new java.util.concurrent.atomic.AtomicBoolean(); long until=android.os.SystemClock.elapsedRealtime()+5000;
         while(!ready.get() && android.os.SystemClock.elapsedRealtime()<until) { scenario.onActivity(activity->ready.set((boolean)field(activity,"storageHealthy"))); if(!ready.get()) android.os.SystemClock.sleep(30); } assertTrue(ready.get());

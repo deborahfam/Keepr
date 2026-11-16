@@ -2,6 +2,16 @@
 
 An offline Android vault for deals, property listings, and marketplace/social posts. Native Java 17 / Android platform UI, Android 8.0+ (API 26), SQLite, WorkManager, OkHttp, and jsoup.
 
+## Download and install
+
+Download **Keepr-0.5.0.apk** from [GitHub Releases](https://github.com/deborahfam/Keepr/releases). Open the APK on your Android phone and allow installation from your browser or file manager when Android asks. Android 8.0 or newer is required.
+
+Version 0.5.0 introduces the dark red interface, redesigned launcher icon, cleaner saved-post cards, and a remembered **Cards / List** view choice. Text search and categories stay on the dashboard; advanced filters and bulk selection are in **⋯**.
+
+The release APK uses the existing development signing identity, allowing an in-place update over builds installed from this development machine. It is a debug build, not a production-signed store release. If Android reports a signature conflict, do not uninstall without first exporting a Keepr backup. GitHub Actions build artifacts use the runner’s debug key and are for testing; use the APK attached to a release for updates compatible with the existing installation.
+
+Each release includes a SHA-256 checksum file. Download the APK and checksum together, then verify on Linux with `sha256sum -c Keepr-0.5.0.apk.sha256`.
+
 ## Share and save
 
 1. In the source app choose Share, then its external **More / Share to…** option if needed to reach Android's share menu.
@@ -35,7 +45,7 @@ Photos load one at a time in the carousel, so large albums do not decode every i
 
 ## Backup, restore, and editing
 
-Use **Backup and restore** below the collection to export a ZIP through Android's document picker. It contains every saved post, folder, tag, original shared caption, offline photo, and photo-download state. Keep the exported file outside this device. Backups are unencrypted; choose a trusted destination. Keep Keepr open until it reports completion. Failed exports may leave an incomplete destination file; export again before relying on it.
+Open the **⋯** collection menu and choose **Backup and restore** to export a ZIP through Android's document picker. It contains every saved post, folder, tag, original shared caption, offline photo, and photo-download state. Keep the exported file outside this device. Backups are unencrypted; choose a trusted destination. Keep Keepr open until it reports completion. Failed exports may leave an incomplete destination file; export again before relying on it.
 
 **Restore backup** validates the archive and photo checksums before merging missing posts in a database transaction. Existing post IDs are skipped, preserving newer local edits. Folder/tag names are matched ignoring case. Missing or damaged photos, invalid paths, and unsupported archive versions reject the import. Restore does not erase your collection. Pending capture work is rescheduled after import. Format version 2 includes trash entries and expiry dates, and imports version 1 archives. It supports up to 32 MiB of metadata, 8 MiB per photo, and 4 GiB of uncompressed content.
 
@@ -51,17 +61,19 @@ Saving a URL already in the vault offers **Open existing**, **Update capture**, 
 
 ## Search, sorting, and bulk organization
 
-**Filters and sorting** adds exact tag and source filters plus a saved-date range (inclusive dates in the device’s time zone). These combine with search, folder, and tracking status. Choose newest first, oldest first, or price ascending/descending. Price sorting groups currencies alphabetically and sorts decimal amounts within each group; missing or unrecognized prices appear last. It does not convert currencies or guess the meaning of formatted price text. Filter choices survive screen recreation.
+Switch between **Cards** and a compact **List** above the results. Keepr remembers this choice, and switching preserves search, filters, and bulk selection. Tap a list row or **Open** on a card to view the saved post.
+
+The dashboard shows text search, categories, and the **Cards / List** switch. Open **⋯** for **Filters and sorting** or **Select posts**. **Filters and sorting** contains the status control and **Tags, sources, dates & sort**, which adds exact tag and source filters plus a saved-date range (inclusive dates in the device’s time zone). These combine with search, folder, and tracking status. Choose newest first, oldest first, or price ascending/descending. Price sorting groups currencies alphabetically and sorts decimal amounts within each group; missing or unrecognized prices appear last. It does not convert currencies or guess the meaning of formatted price text. Filter choices survive screen recreation.
 
 Tap **Select posts**, check individual cards or **Select all results**, then choose **Actions** to move posts to a folder, add tags, archive, or delete. Adding tags preserves existing tags; a tag-limit violation rolls back the whole batch. Selection is limited to visible results, so changing filters removes hidden posts from the selection. Deletion asks for confirmation and moves selected posts and their saved photos into Trash; archive keeps everything in the collection.
 
-**Manage folders** lets you rename a folder or merge it into another existing folder. Renaming preserves membership, and merging moves all source posts into the destination before removing the source folder. Names remain unique ignoring case. Folder IDs remain stable behind their display names; old backups and newly created folders still work after a rename.
+**Manage folders** in the **⋯** collection menu lets you rename a folder or merge it into another existing folder. Renaming preserves membership, and merging moves all source posts into the destination before removing the source folder. Names remain unique ignoring case. Folder IDs remain stable behind their display names; old backups and newly created folders still work after a rename.
 
 ## Capture progress and Trash
 
 Cards show discovered photo counts (for example, **8 of 12 photos saved**), **Downloading** while capture is pending, or **Needs attention** when capture fails or photos are missing. Open the post for details and retry options.
 
-Single and bulk deletion move posts to **Trash**, retaining photos, tags, notes, folder, and status. Open Trash from the collection to restore a post or confirm permanent deletion. New deletions expire after 30 days by default; choose 7, 30, or 90 days in Trash. Changing the setting affects future deletions only. Expired entries are removed when opening Keepr/Trash or by daily background cleanup, subject to Android scheduling. Restoring a post resumes pending capture work. Backups preserve trash membership and expiry dates.
+Single and bulk deletion move posts to **Trash**, retaining photos, tags, notes, folder, and status. Open Trash from the **⋯** collection menu to restore a post or confirm permanent deletion. New deletions expire after 30 days by default; choose 7, 30, or 90 days in Trash. Changing the setting affects future deletions only. Expired entries are removed when opening Keepr/Trash or by daily background cleanup, subject to Android scheduling. Restoring a post resumes pending capture work. Backups preserve trash membership and expiry dates.
 
 ## Architecture
 

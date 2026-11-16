@@ -19,7 +19,7 @@ import java.util.concurrent.*;
 
 /** Offline item detail, lazy photo carousel, and capture diagnostics. */
 public final class PostDetailActivity extends Activity {
-    private final int ink=0xff27223b,muted=0xff6b657a,purple=0xff6648ca,paper=0xfff8f6f2;
+    private final int ink=UiStyles.INK,muted=UiStyles.MUTED,accent=UiStyles.ACCENT_TEXT,paper=UiStyles.PAPER;
     private final ExecutorService database=Executors.newSingleThreadExecutor(),images=Executors.newSingleThreadExecutor();
     private SQLiteSavedItemRepository repository;
     private SavedItem item;
@@ -52,7 +52,7 @@ public final class PostDetailActivity extends Activity {
         back.setOnClickListener(v->finish()); toolbar.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));
         TextView title=text("Saved find",18,ink); title.setTypeface(null,Typeface.BOLD);
         LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(0,-2,1); titleParams.leftMargin=dp(12); toolbar.addView(title,titleParams);
-        TextView local=text("OFFLINE VAULT",10,purple); local.setTypeface(null,Typeface.BOLD); toolbar.addView(local); root.addView(toolbar);
+        TextView local=text("OFFLINE VAULT",10,accent); local.setTypeface(null,Typeface.BOLD); toolbar.addView(local); root.addView(toolbar);
         tabs=new LinearLayout(this); tabs.setPadding(dp(24),dp(4),dp(24),dp(8)); root.addView(tabs);
         scroll=new ScrollView(this); body=column(); body.setPadding(dp(24),dp(12),dp(24),dp(24)); scroll.addView(body);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
@@ -85,12 +85,12 @@ public final class PostDetailActivity extends Activity {
         if(item==null) return;
         body.removeAllViews();
         heading=text(item.title(),28,ink); heading.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); body.addView(heading);
-        TextView location=text((item.categoryId()==null ? "Other" : item.categoryId())+"  ·  "+status(item.status()),13,purple); body.addView(location);
-        if(!item.tags().isEmpty()) body.addView(text("#"+String.join("  #",item.tags()),13,purple));
+        TextView location=text((item.categoryId()==null ? "Other" : item.categoryId())+"  ·  "+status(item.status()),13,accent); body.addView(location);
+        if(!item.tags().isEmpty()) body.addView(text("#"+String.join("  #",item.tags()),13,accent));
         if(tab.equals("Post") || tab.equals("Photos")) {
             gallery();
             if(tab.equals("Post")) {
-                if(!item.price().isEmpty()) body.addView(text(item.currency()+" "+item.price(),24,purple));
+                if(!item.price().isEmpty()) body.addView(text(item.currency()+" "+item.price(),24,accent));
                 section("Publication",item.description().isEmpty() ? item.sharedText() : item.description());
                 if(!item.sharedText().isEmpty() && !item.sharedText().equals(item.description())) section("Original shared text",item.sharedText());
                 section("My notes",item.notes());
@@ -208,12 +208,12 @@ public final class PostDetailActivity extends Activity {
         TextView summary=text(captureSummary(),12,muted); body.addView(summary);
         if(item.media().isEmpty()) {
             TextView empty=text(item.previewState()==SavedItem.PreviewState.PENDING ? "Photos are being fetched. You can leave this screen; downloads continue in the background." : "No photos have been saved for this post.",15,muted);
-            empty.setPadding(dp(20),dp(30),dp(20),dp(30)); empty.setBackground(shape(0xffeee8fa,18)); body.addView(empty); return;
+            empty.setPadding(dp(20),dp(30),dp(20),dp(30)); empty.setBackground(shape(UiStyles.SOFT,18)); body.addView(empty); return;
         }
         photoIndex=Math.max(0,Math.min(photoIndex,item.media().size()-1));
         CachedMedia media=item.media().get(photoIndex);
         ImageView photo=new ImageView(this); photo.setId(R.id.detail_photo); photo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        photo.setBackground(shape(0xffeee8fa,20)); photo.setClipToOutline(true);
+        photo.setBackground(shape(UiStyles.SOFT,20)); photo.setClipToOutline(true);
         photo.setContentDescription(getString(R.string.gallery_position,photoIndex+1,item.media().size()));
         photo.setOnClickListener(v->showPhoto());
         body.addView(photo,new LinearLayout.LayoutParams(-1,dp(270))); load(photo,media,1000);
@@ -234,7 +234,7 @@ public final class PostDetailActivity extends Activity {
         LinearLayout controls=new LinearLayout(this); controls.setGravity(Gravity.CENTER_VERTICAL);
         Button previous=button("‹",false); previous.setId(R.id.previous_photo); previous.setTextSize(24); previous.setContentDescription(getString(R.string.previous_photo));
         previous.setEnabled(photoIndex>0); previous.setAlpha(previous.isEnabled()?1f:0.35f); controls.addView(previous,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        TextView counter=text(getString(R.string.gallery_position,photoIndex+1,item.media().size()),13,purple); counter.setId(R.id.gallery_counter); counter.setGravity(Gravity.CENTER);
+        TextView counter=text(getString(R.string.gallery_position,photoIndex+1,item.media().size()),13,accent); counter.setId(R.id.gallery_counter); counter.setGravity(Gravity.CENTER);
         controls.addView(counter,new LinearLayout.LayoutParams(0,-2,1));
         Button next=button("›",false); next.setId(R.id.next_photo); next.setTextSize(24); next.setContentDescription(getString(R.string.next_photo));
         next.setEnabled(photoIndex<item.media().size()-1); next.setAlpha(next.isEnabled()?1f:0.35f); controls.addView(next,new LinearLayout.LayoutParams(dp(48),dp(48)));
@@ -285,7 +285,7 @@ public final class PostDetailActivity extends Activity {
     }
     private void section(String name,String value) {
         if(value==null || value.isEmpty()) return;
-        TextView caption=text(name.toUpperCase(Locale.ROOT),11,purple); caption.setTypeface(null,Typeface.BOLD); caption.setPadding(0,dp(22),0,dp(6)); body.addView(caption);
+        TextView caption=text(name,13,accent); caption.setTypeface(null,Typeface.BOLD); caption.setPadding(0,dp(22),0,dp(6)); body.addView(caption);
         TextView content=text(value,16,ink); content.setTextIsSelectable(true); content.setLineSpacing(dp(3),1); body.addView(content);
     }
     private String status(SavedItem.Status status) { return StatusLabels.label(this,status); }
@@ -293,11 +293,9 @@ public final class PostDetailActivity extends Activity {
     private TextView text(String value,int size,int color) { TextView view=new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(color); view.setPadding(0,dp(6),0,dp(6)); return view; }
     private GradientDrawable shape(int color,int radius) { GradientDrawable drawable=new GradientDrawable(); drawable.setColor(color); drawable.setCornerRadius(dp(radius)); return drawable; }
     private Button button(String text,boolean primary) {
-        Button button=new Button(this); button.setText(text); button.setTextSize(14); button.setAllCaps(false); button.setTextColor(primary?Color.WHITE:purple);
-        button.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x226648ca),shape(primary?purple:0xffeee8fa,14),shape(Color.WHITE,14)));
-        button.setMinWidth(0); button.setMinimumWidth(0); button.setPadding(dp(12),0,dp(12),0); button.setStateListAnimator(null); return button;
+        return UiStyles.button(this,text,primary);
     }
-    private LinearLayout.LayoutParams block() { LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(52)); params.topMargin=dp(14); return params; }
+    private LinearLayout.LayoutParams block() { LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2); params.topMargin=dp(14); return params; }
     private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
     @Override protected void onSaveInstanceState(Bundle state) { if(editDialog!=null && editDialog.isShowing()) {
         state.putBoolean("editing",true); state.putString("edit_title",editTitle.getText().toString()); state.putString("edit_notes",editNotes.getText().toString());
