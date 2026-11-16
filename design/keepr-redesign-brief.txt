@@ -1,0 +1,48 @@
+KEEPR — REDISEÑO DE PRODUCTO PARA ANDROID
+
+Encargo del usuario
+«Vamos a rediseñar esta app en Pencil, súper lindo y útil, y deja que Pencil haga el diseño».
+Pencil debe proponer y ejecutar la dirección visual. No se busca copiar el aspecto actual ni limitarse a recolorear controles. El resultado debe ser un documento .pen editable, coherente y listo para revisar antes de implementar.
+
+Qué es Keepr
+Una colección personal y local de enlaces, anuncios, productos, inmuebles, ideas y publicaciones compartidas. Android nativo. Sin cuenta, sin nube y sin sincronización. Guarda títulos, texto, fotos disponibles, notas, categorías, etiquetas y estados. Puede recibir contenido desde Compartir de otras apps o guardar un enlace manualmente. No promete capturar todo el contenido de fuentes externas.
+
+Preferencias confirmadas del usuario
+- Interfaz de tonos oscuros y rojo como uno de los colores principales.
+- Belleza, claridad y comodidad; jerarquía visual cuidada y contenido protagonista.
+- Inicio despejado: mantener búsqueda por texto, selector de categorías y cambio Tarjetas / Lista. No llenar el inicio de controles adicionales ni filtros avanzados.
+- Las dos vistas usan los mismos elementos y filtros. La preferencia se recuerda.
+- Filtros avanzados, orden, acciones múltiples y gestión de categorías siguen disponibles de forma secundaria.
+- Sección Ajustes con versión instalada, comprobación de actualizaciones y descarga desde GitHub.
+- Propuesta de interfaz en español con textos breves y naturales. Mantener la marca «keepr».
+
+Flujos reales a cubrir
+1. Colección en tarjetas: imagen cuando existe, título, categoría, estado, precio opcional, captura/offline comprensible, abrir detalle y opciones secundarias. Evitar repetir información y botones grandes dentro de cada tarjeta.
+2. Misma colección en lista compacta: miniaturas, títulos legibles, datos esenciales; comparar varios elementos con facilidad. Sin imágenes, usar un tratamiento intencional.
+3. Guardar contenido: enlace opcional si hay texto/fotos compartidos, título, categoría, etiquetas, texto original y notas. Guardar no necesita esperar a que termine la captura en red. Organizar datos esenciales y opcionales sin una pared de campos.
+4. Detalle: texto, fotos navegables y ampliables, precio/contacto cuando existan, notas, categoría y etiquetas. Estado: Activo, Contactado, Comprado, Archivado. Acciones: editar, abrir original, añadir fotos y reintentar contenido faltante cuando corresponda. Mantener jerarquía clara.
+5. Ajustes: versión instalada, buscar actualización, resultados y enlace a versiones de GitHub. Descargar abre el APK oficial en el navegador; luego Android solicita la instalación. No representar instalación automática ni una barra de descarga dentro de Keepr, pues la descarga pertenece al navegador. Incluir accesos a copia de seguridad/restaurar y papelera.
+6. Estados relevantes: colección vacía con inicio claro, búsqueda sin coincidencias con recuperación, actualización disponible, sin conexión/error de comprobación, versión al día, fotos pendientes o incompletas.
+7. Papelera y copia de seguridad: considerar como flujos secundarios, con restauración y confirmación de borrado definitivo. Los elementos enviados a papelera se pueden recuperar antes de su caducidad. Las copias se exportan/importan mediante el selector de archivos de Android.
+
+Contenido de muestra
+Usar contenido ficticio realista y neutro: una lámpara para el estudio, un apartamento luminoso, una cámara compacta, una idea de viaje. Categorías como Hogar, Tecnología, Lugares e Ideas son ejemplos visuales; las categorías reales son administrables. Mostrar elementos con y sin precio y fotos, títulos cortos y uno largo. No usar datos personales del usuario.
+
+Libertad creativa de Pencil
+Elegir composición, tipografía, iconografía, espaciado, superficies, estilo fotográfico y navegación según criterio de diseño. Explorar una identidad sofisticada y propia de Keepr con rojo y oscuros. Evitar la estética de panel administrativo genérico, colores decorativos sin función, botones redundantes y grandes banners que quitan espacio a la colección. No añadir funciones inexistentes como IA conversacional, pagos, anuncios, nube o colaboración.
+
+Requisitos de calidad
+- Pantallas móviles completas, aproximadamente 390–412 px lógicos de ancho, respetando áreas seguras de Android.
+- Interacciones táctiles cómodas de al menos 48 px lógicos; texto principal legible y contraste adecuado sobre oscuros.
+- Diferenciar selección, acciones primarias, acciones destructivas, estados y deshabilitado sin depender solo del color rojo.
+- Botón de guardar fácil de alcanzar sin tapar el contenido; scroll claramente planteado.
+- Estados vacíos y errores accionables, sin promesas técnicas incorrectas.
+- Componentes reutilizables para tarjetas, filas, búsqueda, categorías, cambio de vista, botones, estados y diálogos.
+- Tokens de color, tipografía y espaciado; incluir variantes necesarias y notas breves de interacción.
+- Capas editables y bien nombradas; no entregar pantallas planas como única salida.
+
+Entregables
+Archivo design/keepr-redesign.pen con las pantallas principales y estados organizados en un lienzo de revisión. Una portada/overview y vistas previas exportadas de las pantallas principales. Dar prioridad a la calidad del inicio, ambas vistas, detalle, guardado y ajustes; después añadir estados y secundarios. Inspeccionar el diseño final, corregir recortes/solapamientos y mantener consistencia.
+
+Alcance de este encargo
+Diseño en Pencil. No modificar el código Java, compilar, publicar en GitHub ni instalar cambios en el teléfono en esta fase. El usuario revisará esta propuesta antes de implementarla.

@@ -33,8 +33,11 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     }
     private List<SavedItem> query(SQLiteDatabase db) { return query(db,null); }
     private List<SavedItem> query(SQLiteDatabase db,String itemId) {
-        List<SavedItem> items = new ArrayList<>();
-        try (Cursor c = db.rawQuery("SELECT id,url,title,description,site_name,image_url,price,currency,contact,notes,(SELECT name FROM Category WHERE id=SavedItem.category_id),status,preview_state,preview_error,created_at,updated_at,shared_text,expected_photos,(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='PENDING'),(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='FAILED') FROM SavedItem WHERE id NOT IN (SELECT saved_item_id FROM Trash)"+(itemId==null ? "" : " AND id=?")+" ORDER BY created_at DESC,id", itemId==null ? null : new String[]{itemId})) {
+        return queryRows(db,"id NOT IN (SELECT saved_item_id FROM Trash)"+(itemId==null?"":" AND id=?"),itemId==null?null:new String[]{itemId},"created_at DESC,id","");
+    }
+    private List<SavedItem> queryRows(SQLiteDatabase db,String where,String[] args,String order,String limit) {
+        List<SavedItem> items=new ArrayList<>();
+        try(Cursor c=db.rawQuery("SELECT id,url,title,description,site_name,image_url,price,currency,contact,notes,(SELECT name FROM Category WHERE id=SavedItem.category_id),status,preview_state,preview_error,created_at,updated_at,shared_text,expected_photos,(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='PENDING'),(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='FAILED') FROM SavedItem WHERE "+where+" ORDER BY "+order+limit,args)) {
             while (c.moveToNext()) items.add(new SavedItem(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
                     c.getString(4), c.getString(5), c.getString(6), c.getString(7), c.getString(8), c.getString(9),
                     c.getString(10), SavedItem.Status.valueOf(c.getString(11)), SavedItem.PreviewState.valueOf(c.getString(12)),
@@ -42,6 +45,33 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         }
         return Collections.unmodifiableList(items);
     }
+    public void initialize() throws JSONException { migrateLegacy(helper.getWritableDatabase()); }
+    public record Page(List<SavedItem> items,int total) {}
+    public Page page(FeedQuery filter,int offset,int size) {
+        if(offset<0 || size<1 || size>100) throw new IllegalArgumentException("Invalid page bounds");
+        var sql=filter.sql(); SQLiteDatabase db=helper.getReadableDatabase(); db.beginTransaction();
+        try {
+            int total;
+            try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM SavedItem WHERE "+sql.where(),sql.args())) { c.moveToFirst(); total=c.getInt(0); }
+            List<SavedItem> items=queryRows(db,sql.where(),sql.args(),sql.order()," LIMIT "+size+" OFFSET "+offset);
+            db.setTransactionSuccessful(); return new Page(items,total);
+        } finally { db.endTransaction(); }
+    }
+    public List<String> matchingIds(FeedQuery filter) {
+        var sql=filter.sql(); List<String> ids=new ArrayList<>();
+        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT id FROM SavedItem WHERE "+sql.where()+" ORDER BY "+sql.order(),sql.args())) { while(c.moveToNext()) ids.add(c.getString(0)); } return ids;
+    }
+    public List<String> pendingItemIds() {
+        List<String> ids=new ArrayList<>();
+        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT id FROM SavedItem WHERE url!='' AND (preview_state='PENDING' OR capture_version<4) AND id NOT IN (SELECT saved_item_id FROM Trash)",null)) { while(c.moveToNext()) ids.add(c.getString(0)); } return ids;
+    }
+    public List<String> filterOptions(boolean tags) {
+        List<String> values=new ArrayList<>();
+        String sql=tags?"SELECT DISTINCT t.name FROM Tag t JOIN SavedItemTag it ON it.tag_id=t.id WHERE it.saved_item_id NOT IN (SELECT saved_item_id FROM Trash) ORDER BY t.name COLLATE NOCASE":"SELECT DISTINCT "+FeedQuery.SOURCE+" AS source FROM SavedItem WHERE id NOT IN (SELECT saved_item_id FROM Trash) ORDER BY source COLLATE NOCASE";
+        try(Cursor c=helper.getReadableDatabase().rawQuery(sql,null)) { while(c.moveToNext()) values.add(c.getString(0)); } return values;
+    }
+    private Runnable changeObserver;
+    public void observeChanges(Runnable observer) { changeObserver=observer; }
     private void migrateLegacy(SQLiteDatabase db) throws JSONException {
         android.content.SharedPreferences prefs = context.getSharedPreferences("keepr", Context.MODE_PRIVATE);
         if (prefs.getBoolean("sqlite_migrated", false)) return;
@@ -347,8 +377,10 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     }
     @Override public void observe(Consumer<List<SavedItem>> observer) { observers.add(observer); }
     private void emit() {
+        if(changeObserver!=null) changeObserver.run();
+        if(observers.isEmpty()) return;
         List<SavedItem> snapshot = query(helper.getReadableDatabase());
         for (Consumer<List<SavedItem>> observer : observers) observer.accept(snapshot);
     }
-    @Override public void close() { observers.clear(); helper.close(); }
+    @Override public void close() { changeObserver=null; observers.clear(); helper.close(); }
 }
