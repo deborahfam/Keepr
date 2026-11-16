@@ -16,4 +16,7 @@
     <item name="view_list" type="id" />
     <item name="collection_items" type="id" />
     <item name="collection_refine" type="id" />
+    <item name="update_status" type="id" />
+    <item name="check_updates" type="id" />
+    <item name="download_update" type="id" />
 </resources>

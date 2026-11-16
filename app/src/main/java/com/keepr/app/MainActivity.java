@@ -170,6 +170,7 @@ public final class MainActivity extends Activity {
         brand.addView(menuButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         menuButton.setOnClickListener(v -> {
             PopupMenu menu = new PopupMenu(this, menuButton);
+            menu.getMenu().add("Settings").setOnMenuItemClickListener(item -> { startActivity(new Intent(this, SettingsActivity.class)); return true; });
             menu.getMenu().add("Filters and sorting").setOnMenuItemClickListener(item -> { collectionControls.showTools(); return true; });
             menu.getMenu().add("Select posts").setOnMenuItemClickListener(item -> { collectionControls.toggleSelection(); return true; });
             menu.getMenu().add("Clear search and filters").setOnMenuItemClickListener(item -> {

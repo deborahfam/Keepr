@@ -4,13 +4,15 @@ An offline Android vault for deals, property listings, and marketplace/social po
 
 ## Download and install
 
-Download **Keepr-0.5.0.apk** from [GitHub Releases](https://github.com/deborahfam/Keepr/releases). Open the APK on your Android phone and allow installation from your browser or file manager when Android asks. Android 8.0 or newer is required.
+Download **Keepr-0.6.0.apk** from [GitHub Releases](https://github.com/deborahfam/Keepr/releases). Open the APK on your Android phone and allow installation from your browser or file manager when Android asks. Android 8.0 or newer is required.
 
-Version 0.5.0 introduces the dark red interface, redesigned launcher icon, cleaner saved-post cards, and a remembered **Cards / List** view choice. Text search and categories stay on the dashboard; advanced filters and bulk selection are in **⋯**.
+Version 0.6.0 adds **Settings → App updates**. Open **⋯ → Settings** to see the installed version, check the latest public GitHub release, and download a newer APK in your browser. Open the completed download to let Android install it. Update checks happen only when you tap **Check for updates**; they send no saved posts or account credentials. Offline, rate-limit, missing-APK, and already-up-to-date states are shown explicitly. Settings also links to Backup and Trash.
+
+The dark red interface, redesigned launcher icon, cleaner saved-post cards, and remembered **Cards / List** view remain available. Text search and categories stay on the dashboard; advanced filters and bulk selection are in **⋯**.
 
 The release APK uses the existing development signing identity, allowing an in-place update over builds installed from this development machine. It is a debug build, not a production-signed store release. If Android reports a signature conflict, do not uninstall without first exporting a Keepr backup. GitHub Actions build artifacts use the runner’s debug key and are for testing; use the APK attached to a release for updates compatible with the existing installation.
 
-Each release includes a SHA-256 checksum file. Download the APK and checksum together, then verify on Linux with `sha256sum -c Keepr-0.5.0.apk.sha256`.
+Each release includes a SHA-256 checksum file. Download the APK and checksum together, then verify on Linux with `sha256sum -c Keepr-0.6.0.apk.sha256`.
 
 ## Share and save
 
