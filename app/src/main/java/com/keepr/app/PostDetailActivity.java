@@ -32,7 +32,9 @@ public final class PostDetailActivity extends Activity {
     private LiveData<List<WorkInfo>> updates;
     private androidx.lifecycle.Observer<List<WorkInfo>> observer;
     private Dialog photoDialog;
-    private AlertDialog editDialog,statusDialog;
+    private AlertDialog editDialog,statusDialog,contactDialog;
+    private EditText contactName,contactPhone,contactEmail,contactWhatsapp;
+    private Bundle pendingContact;
     private EditText editTitle,editNotes,editTags,editPrice,editCurrency,editLocation,editProductType,editPeriod;
     private AutoCompleteTextView editFolder;
     private Bundle pendingEdit;
@@ -42,6 +44,7 @@ public final class PostDetailActivity extends Activity {
         if(id==null) { finish(); return; }
         if(state!=null) { photoIndex=state.getInt("photo",0); tab=state.getString("tab","Post"); }
         if(state!=null && state.getBoolean("editing")) pendingEdit=new Bundle(state);
+        if(state!=null && state.getBoolean("editing_contact")) pendingContact=new Bundle(state);
         repository=new SQLiteSavedItemRepository(this);
         LinearLayout root=column(); root.setBackgroundColor(paper);
         root.setOnApplyWindowInsetsListener((view,insets)->{
@@ -54,6 +57,7 @@ public final class PostDetailActivity extends Activity {
         LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(0,-2,1); titleParams.leftMargin=dp(12); toolbar.addView(title,titleParams);
         root.addView(toolbar);
         tabs=new LinearLayout(this); tabs.setPadding(dp(4),dp(4),dp(4),dp(4)); tabs.setBackground(shape(UiStyles.SURFACE,18));
+        LinearLayout.LayoutParams tabLayout=new LinearLayout.LayoutParams(-1,-2); tabLayout.setMargins(dp(20),dp(4),dp(20),dp(8)); root.addView(tabs,tabLayout);
         scroll=new ScrollView(this); body=column(); body.setPadding(dp(20),dp(8),dp(20),dp(24)); scroll.addView(body);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root); renderTabs(); body.addView(text("Opening saved post…",16,muted));
@@ -69,7 +73,7 @@ public final class PostDetailActivity extends Activity {
                     String selected=item!=null && photoIndex<item.media().size() ? item.media().get(photoIndex).id() : null;
                     item=loaded;
                     if(selected!=null) for(int i=0;i<item.media().size();i++) if(item.media().get(i).id().equals(selected)) photoIndex=i;
-                    progress=state; render(); if(pendingEdit!=null) { Bundle draft=pendingEdit; pendingEdit=null; showEdit(draft); } });
+                    progress=state; render(); if(pendingEdit!=null) { Bundle draft=pendingEdit; pendingEdit=null; showEdit(draft); } if(pendingContact!=null) { Bundle draft=pendingContact; pendingContact=null; showContacts(draft); } });
             } catch(Exception error) { runOnUiThread(()->{ if(!isDestroyed()) Toast.makeText(this,"Could not open this saved post",Toast.LENGTH_LONG).show(); }); }
         });
     }
@@ -84,77 +88,107 @@ public final class PostDetailActivity extends Activity {
     private void render() {
         if(item==null) return;
         body.removeAllViews();
-        if(tab.equals("Post") || tab.equals("Photos")) gallery();
-        if(tabs.getParent()!=null) ((ViewGroup)tabs.getParent()).removeView(tabs);
-        LinearLayout.LayoutParams tabParams=new LinearLayout.LayoutParams(-1,-2); tabParams.topMargin=dp(12); tabParams.bottomMargin=dp(14); body.addView(tabs,tabParams);
-        heading=text(item.title(),28,ink); heading.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); body.addView(heading);
-        TextView location=text((item.categoryId()==null ? "Other" : item.categoryId())+"  ·  "+status(item.status()),13,accent); body.addView(location);
-        if(!item.tags().isEmpty()) body.addView(text("#"+String.join("  #",item.tags()),13,accent));
-        if(tab.equals("Post") || tab.equals("Photos")) {
-            if(tab.equals("Post")) {
-                boolean incomplete=progress.failed()>0 || progress.unexposed()>0 || progress.pending()>0 || item.previewState()!=SavedItem.PreviewState.READY;
-                TextView capture=text(captureSummary()+"\nDownloaded photos remain available offline.",13,incomplete?0xffF4C567:0xffA5D5BD);
-                capture.setPadding(dp(16),dp(14),dp(16),dp(14)); capture.setBackground(shape(incomplete?0xff2C2312:0xff10201A,16)); body.addView(capture,block());
-                listingDetails();
-                section("Publication",item.description().isEmpty() ? item.sharedText() : item.description());
-                if(!item.sharedText().isEmpty() && !item.sharedText().equals(item.description())) section("Original shared text",item.sharedText());
-                section("My notes",item.notes());
-                if(!item.contact().isEmpty()) section("Contact",item.contact());
-            } else {
-                section("Photo downloads",captureSummary());
-                body.addView(text("Swipe the photo or use the arrows. Tap it to zoom. Photos with a local copy remain available offline.",14,muted));
-                if(progress.failed()>0 || progress.unexposed()>0 || !item.previewError().isEmpty()) section("Unavailable content",item.previewError());
+        TextView category=text((item.categoryId()==null?"Other":item.categoryId())+"  ·  "+status(item.status()),12,accent); body.addView(category);
+        heading=text(PublicationText.clean(item.title()),25,ink); heading.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); body.addView(heading);
+        if(tab.equals("Post")) {
+            if(!item.price().isEmpty()) {
+                TextView price=text((item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod()),26,ink);
+                price.setTypeface(null,Typeface.BOLD); body.addView(price);
+            }
+            LinearLayout actions=new LinearLayout(this);
+            Button edit=button("Edit post",true); edit.setOnClickListener(v->showEdit(null));
+            Button statusButton=button("Change status",false); statusButton.setId(R.id.change_status); statusButton.setOnClickListener(v->showStatusPicker());
+            LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,-2,1); half.rightMargin=dp(8); actions.addView(edit,half); actions.addView(statusButton,new LinearLayout.LayoutParams(0,-2,1)); body.addView(actions,block());
+            if(!item.media().isEmpty()) { gallery(); }
+            listingDetails(); contactDetails();
+            section("Description",PublicationText.clean(item.description().isEmpty()?item.sharedText():item.description()));
+            section("My notes",item.notes());
+            if(!item.tags().isEmpty()) section("Tags","#"+String.join("  #",item.tags()));
+        } else if(tab.equals("Photos")) {
+            gallery(); section("Photo downloads",captureSummary());
+            body.addView(text("Downloaded photos work offline. Tap a photo to zoom.",13,muted));
+            if(!item.previewError().isEmpty()) section("Capture notes",item.previewError());
+            Button add=button(getString(R.string.add_photos),true); body.addView(add,block());
+            add.setOnClickListener(v->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true),42));
+            if(!item.url().isEmpty()) {
+                Button retry=button(getString(R.string.retry_missing_photos),false); body.addView(retry,block()); retry.setEnabled(item.previewState()!=SavedItem.PreviewState.PENDING);
+                retry.setOnClickListener(v->{ retry.setEnabled(false); database.execute(()->{ repository.retryPhotos(id); SnapshotWorker.enqueue(this,id); runOnUiThread(this::reload); }); });
             }
         } else {
-            listingDetails();
-            section("Folder",item.categoryId()==null ? "Other" : item.categoryId());
-            section("Tags",item.tags().isEmpty() ? "No tags" : String.join(", ",item.tags()));
-            section("Tracking status",status(item.status()));
-            section("Saved on",DateFormat.getDateTimeInstance(DateFormat.MEDIUM,DateFormat.SHORT).format(new Date(item.createdAt())));
-            section("Last updated",DateFormat.getDateTimeInstance(DateFormat.MEDIUM,DateFormat.SHORT).format(new Date(item.updatedAt())));
-            section("Photo downloads",captureSummary());
-            long bytes=0; for(CachedMedia photo:item.media()) bytes+=photo.byteCount();
-            section("Photo storage",android.text.format.Formatter.formatShortFileSize(this,bytes)+" on this device");
-            section("Source",item.siteName().isEmpty() ? "Shared content" : item.siteName());
-            section("Original link",item.url()); section("Capture notes",item.previewError());
-        }
-        Button changeStatus=button(getString(R.string.change_status)+": "+StatusLabels.label(this,item.status()),false);
-        changeStatus.setId(R.id.change_status); body.addView(changeStatus,block()); changeStatus.setOnClickListener(v->showStatusPicker());
-        Button edit=button(getString(R.string.edit_post),true); body.addView(edit,block());
-        edit.setOnClickListener(v->showEdit(null));
-        Button addPhotos=button(getString(R.string.add_photos),false); body.addView(addPhotos,block());
-        addPhotos.setOnClickListener(v->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT)
-                .addCategory(Intent.CATEGORY_OPENABLE).setType("image/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true),42));
-        if(!item.url().isEmpty()) {
-            Button refresh=button("Read listing details from link",false); body.addView(refresh,block());
-            refresh.setOnClickListener(v->{
-                refresh.setEnabled(false); refresh.setText("Reading public details…");
-                database.execute(()->{
-                    try { PreviewMetadata preview=new MetadataService().fetch(item.url()); repository.applyPreview(id,preview);
-                        runOnUiThread(()->{ if(!isDestroyed()) { reload(); Toast.makeText(this,"Available details updated. Your corrections are preserved.",Toast.LENGTH_LONG).show(); } });
-                    } catch(Exception error) { runOnUiThread(()->{ if(!isDestroyed()) { refresh.setEnabled(true); refresh.setText("Read listing details from link"); Toast.makeText(this,"Could not read public details. Edit them manually or share the post text.",Toast.LENGTH_LONG).show(); } }); }
+            section("Source",item.siteName().isEmpty()?"Shared content":item.siteName());
+            section("Original link",item.url());
+            if(!item.url().isEmpty()) {
+                Button open=button(getString(R.string.open_link),true); body.addView(open,block()); open.setOnClickListener(v->openContact(new Intent(Intent.ACTION_VIEW,Uri.parse(item.url()))));
+                Button refresh=button("Refresh public details",false); body.addView(refresh,block());
+                refresh.setOnClickListener(v->{ refresh.setEnabled(false); refresh.setText("Reading public details…");
+                    database.execute(()->{
+                        try { PreviewMetadata preview=new MetadataService().fetch(item.url()); repository.applyPreview(id,preview);
+                            runOnUiThread(()->{ if(!isDestroyed()) { reload(); Toast.makeText(this,"Available details updated. Your corrections are preserved.",Toast.LENGTH_LONG).show(); } });
+                        } catch(Exception error) { runOnUiThread(()->{ if(!isDestroyed()) { refresh.setEnabled(true); refresh.setText("Refresh public details"); Toast.makeText(this,"Could not read public details. You can edit them manually.",Toast.LENGTH_LONG).show(); } }); }
+                    });
                 });
-            });
-            Button open=button(getString(R.string.open_link),false); body.addView(open,block());
-            open.setOnClickListener(v->{ try { startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(item.url()))); }
-                catch(ActivityNotFoundException e) { Toast.makeText(this,"No browser installed",Toast.LENGTH_SHORT).show(); } });
-            Button retry=button(getString(R.string.retry_missing_photos),false); body.addView(retry,block());
-            retry.setEnabled(item.previewState()!=SavedItem.PreviewState.PENDING);
-            retry.setAlpha(retry.isEnabled()?1f:0.5f);
-            retry.setOnClickListener(v->{ retry.setEnabled(false); database.execute(()->{
-                repository.retryPhotos(id); SnapshotWorker.enqueue(this,id); runOnUiThread(this::reload);
-            }); });
+            }
+            section("Saved",DateFormat.getDateTimeInstance(DateFormat.MEDIUM,DateFormat.SHORT).format(new Date(item.createdAt())));
+            section("Updated",DateFormat.getDateTimeInstance(DateFormat.MEDIUM,DateFormat.SHORT).format(new Date(item.updatedAt())));
+            section("Details source",item.metadataSource()); section("Contact source",item.contacts().source());
+            section("Original shared text",PublicationText.clean(item.sharedText()));
+            long bytes=0; for(CachedMedia photo:item.media()) bytes+=photo.byteCount();
+            section("On this device",item.media().size()+" photos · "+android.text.format.Formatter.formatShortFileSize(this,bytes));
         }
     }
-    private void listingDetails() {
+    private LinearLayout panel(String title) {
         LinearLayout panel=column(); panel.setPadding(dp(16),dp(12),dp(16),dp(16)); panel.setBackground(UiStyles.surface(this,UiStyles.SURFACE,18,UiStyles.LINE));
-        panel.addView(text("Listing details",18,ink));
-        String price=item.price().isEmpty()?"Not found":(item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod());
-        panel.addView(text("Price  ·  "+price,16,ink));
-        panel.addView(text("Location  ·  "+(item.location().isEmpty()?"Not found":item.location()),15,ink));
-        panel.addView(text("Product type  ·  "+(item.productType().isEmpty()?"Not found":item.productType()),15,ink));
-        panel.addView(text(item.metadataSource().isEmpty()?"Details were not provided. You can add them with Edit post.":item.metadataSource()+" Use Edit post to correct them.",12,muted));
-        body.addView(panel,block());
+        TextView name=text(title,18,ink); name.setTypeface(null,Typeface.BOLD); panel.addView(name); body.addView(panel,block()); return panel;
+    }
+    private void listingDetails() {
+        LinearLayout panel=panel("About this listing");
+        panel.addView(text("Location",12,muted)); panel.addView(text(item.location().isEmpty()?"Not provided":item.location(),16,ink));
+        panel.addView(text("Product type",12,muted)); panel.addView(text(item.productType().isEmpty()?"Not provided":item.productType(),16,ink));
+        if(item.price().isEmpty()) panel.addView(text("Price not provided",13,muted));
+        panel.addView(text("Review detected details. You can correct them with Edit post.",12,muted));
+    }
+    private void contactDetails() {
+        ContactDetails contacts=item.contacts(); LinearLayout panel=panel("Contact");
+        if(!contacts.name().isEmpty()) panel.addView(text(contacts.name(),19,ink));
+        if(contacts.isEmpty()) panel.addView(text("No contact information was shared. You can add it below.",14,muted));
+        if(!contacts.phone().isEmpty()) contactRow(panel,"Phone",contacts.phone(),"Call",R.id.contact_call,()->openContact(new Intent(Intent.ACTION_DIAL,Uri.fromParts("tel",contacts.phone(),null))));
+        if(!contacts.email().isEmpty()) contactRow(panel,"Email",contacts.email(),"Email",R.id.contact_email,()->openContact(new Intent(Intent.ACTION_SENDTO,Uri.fromParts("mailto",contacts.email(),null))));
+        if(!contacts.whatsapp().isEmpty()) {
+            String url=ContactParser.whatsappUrl(contacts.whatsapp());
+            contactRow(panel,"WhatsApp",contacts.whatsapp(),"Chat",R.id.contact_whatsapp,url.isEmpty()?null:()->openContact(new Intent(Intent.ACTION_VIEW,Uri.parse(url))));
+            if(url.isEmpty()) panel.addView(text("Add + and the country code to open this WhatsApp number.",12,muted));
+        }
+        if(!contacts.isEmpty()) panel.addView(text("Published details are not verified. Long-press a value to copy it.",12,muted));
+        Button edit=button(contacts.isEmpty()?"Add contact":"Edit contact",false); edit.setId(R.id.edit_contact); edit.setOnClickListener(v->showContacts(null)); panel.addView(edit,block());
+    }
+    private void contactRow(LinearLayout parent,String label,String value,String action,int id,Runnable click) {
+        LinearLayout row=new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout info=column(); info.addView(text(label,12,muted)); TextView data=text(value,16,ink); data.setTextIsSelectable(true); info.addView(data);
+        LinearLayout.LayoutParams details=new LinearLayout.LayoutParams(0,-2,1); details.rightMargin=dp(8); row.addView(info,details);
+        Button button=button(action,false); button.setId(id); button.setContentDescription(action+": "+value); button.setEnabled(click!=null);
+        if(click!=null) button.setOnClickListener(v->click.run()); row.addView(button,new LinearLayout.LayoutParams(dp(76),-2)); parent.addView(row,block());
+    }
+    private void openContact(Intent intent) {
+        try { startActivity(intent); } catch(ActivityNotFoundException | SecurityException error) { Toast.makeText(this,"No compatible app is available. Long-press the contact value to copy it.",Toast.LENGTH_LONG).show(); }
+    }
+    private void showContacts(Bundle draft) {
+        if(item==null || (contactDialog!=null && contactDialog.isShowing())) return;
+        ContactDetails current=item.contacts(); LinearLayout form=column(); form.setPadding(dp(20),dp(12),dp(20),dp(16));
+        contactName=editField(form,"Contact name",draft==null?current.name():draft.getString("contact_name",""),false);
+        contactPhone=editField(form,"Phone",draft==null?current.phone():draft.getString("contact_phone",""),false); contactPhone.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
+        contactEmail=editField(form,"Email",draft==null?current.email():draft.getString("contact_email",""),false); contactEmail.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        contactWhatsapp=editField(form,"WhatsApp (+country code or wa.me link)",draft==null?current.whatsapp():draft.getString("contact_whatsapp",""),false);
+        form.addView(text("Corrections stay saved when you refresh the publication.",13,muted)); ScrollView scroll=new ScrollView(this); scroll.addView(form);
+        contactDialog=new AlertDialog.Builder(this).setTitle("Contact details").setView(scroll).setNegativeButton("Cancel",null).setPositiveButton("Save contact",null).create();
+        contactDialog.setOnShowListener(d->contactDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            try {
+                ContactDetails updated=ContactParser.validated(contactName.getText().toString(),contactPhone.getText().toString(),contactEmail.getText().toString(),contactWhatsapp.getText().toString());
+                AlertDialog dialog=contactDialog; dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+                database.execute(()->{ try { repository.editContacts(id,updated); runOnUiThread(()->{ if(!isDestroyed()) { dialog.dismiss(); reload(); } }); }
+                    catch(Exception error) { runOnUiThread(()->{ if(!isDestroyed()) { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true); Toast.makeText(this,"Could not save contact. Please try again.",Toast.LENGTH_LONG).show(); } }); }
+                });
+            } catch(IllegalArgumentException error) { Toast.makeText(this,error.getMessage(),Toast.LENGTH_LONG).show(); }
+        })); contactDialog.show(); UiStyles.styleEditor(contactDialog);
     }
     private void showStatusPicker() {
         int[] selected={item.status().ordinal()};
@@ -251,7 +285,7 @@ public final class PostDetailActivity extends Activity {
         photo.setBackground(shape(UiStyles.SOFT,20)); photo.setClipToOutline(true);
         photo.setContentDescription(getString(R.string.gallery_position,photoIndex+1,item.media().size()));
         photo.setOnClickListener(v->showPhoto());
-        body.addView(photo,new LinearLayout.LayoutParams(-1,dp(270))); load(photo,media,1000);
+        body.addView(photo,new LinearLayout.LayoutParams(-1,dp(210))); load(photo,media,1000);
         GestureDetector gestures=new GestureDetector(this,new GestureDetector.SimpleOnGestureListener(){
             @Override public boolean onDown(MotionEvent e) { return true; }
             @Override public boolean onSingleTapUp(MotionEvent e) { photo.performClick(); return true; }
@@ -320,8 +354,7 @@ public final class PostDetailActivity extends Activity {
     }
     private void section(String name,String value) {
         if(value==null || value.isEmpty()) return;
-        TextView caption=text(name,13,muted); caption.setTypeface(null,Typeface.BOLD); caption.setPadding(0,dp(22),0,dp(6)); body.addView(caption);
-        TextView content=text(value,16,ink); content.setTextIsSelectable(true); content.setLineSpacing(dp(3),1); body.addView(content);
+        LinearLayout panel=panel(name); TextView content=text(value,15,ink); content.setTextIsSelectable(true); content.setLineSpacing(dp(3),1); panel.addView(content);
     }
     private String status(SavedItem.Status status) { return StatusLabels.label(this,status); }
     private LinearLayout column() { LinearLayout result=new LinearLayout(this); result.setOrientation(LinearLayout.VERTICAL); return result; }
@@ -337,6 +370,8 @@ public final class PostDetailActivity extends Activity {
         state.putString("edit_price",editPrice.getText().toString()); state.putString("edit_currency",editCurrency.getText().toString()); state.putString("edit_period",editPeriod.getText().toString());
         state.putString("edit_location",editLocation.getText().toString()); state.putString("edit_product_type",editProductType.getText().toString());
         state.putString("edit_folder",editFolder.getText().toString()); state.putString("edit_tags",editTags.getText().toString());
-    } state.putInt("photo",photoIndex); state.putString("tab",tab); super.onSaveInstanceState(state); }
-    @Override protected void onDestroy() { if(statusDialog!=null) statusDialog.dismiss(); if(editDialog!=null) editDialog.dismiss(); if(photoDialog!=null) { photoDialog.setOnDismissListener(null); photoDialog.dismiss(); } if(updates!=null && observer!=null) updates.removeObserver(observer); images.shutdownNow(); if(repository!=null) { database.execute(repository::close); database.shutdown(); } super.onDestroy(); }
+    } state.putInt("photo",photoIndex); state.putString("tab",tab); if(contactDialog!=null && contactDialog.isShowing()) {
+        state.putBoolean("editing_contact",true); state.putString("contact_name",contactName.getText().toString()); state.putString("contact_phone",contactPhone.getText().toString()); state.putString("contact_email",contactEmail.getText().toString()); state.putString("contact_whatsapp",contactWhatsapp.getText().toString());
+    } super.onSaveInstanceState(state); }
+    @Override protected void onDestroy() { if(contactDialog!=null) contactDialog.dismiss(); if(statusDialog!=null) statusDialog.dismiss(); if(editDialog!=null) editDialog.dismiss(); if(photoDialog!=null) { photoDialog.setOnDismissListener(null); photoDialog.dismiss(); } if(updates!=null && observer!=null) updates.removeObserver(observer); images.shutdownNow(); if(repository!=null) { database.execute(repository::close); database.shutdown(); } super.onDestroy(); }
 }

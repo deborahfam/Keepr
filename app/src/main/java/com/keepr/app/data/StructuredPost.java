@@ -9,6 +9,7 @@ import java.util.LinkedHashSet;
 /** Only structured publication fields are read; unrelated page images are not scraped. */
 final class StructuredPost {
     String title="",text="",price="",currency="",location="",productType="",period="";
+    com.keepr.app.domain.ContactDetails contacts=com.keepr.app.domain.ContactDetails.EMPTY;
     final LinkedHashSet<String> images=new LinkedHashSet<>();
     static StructuredPost parse(Document doc,String url) {
         StructuredPost post=new StructuredPost();
@@ -74,6 +75,18 @@ final class StructuredPost {
                     if(price.isEmpty() && spec!=null) { price=spec.optString("price",""); currency=spec.optString("priceCurrency",""); }
                     if(spec!=null) period=switch(spec.optString("unitCode","").toUpperCase(java.util.Locale.ROOT)) { case "MON" -> "month"; case "DAY" -> "day"; case "WEE" -> "week"; case "ANN" -> "year"; case "HUR" -> "hour"; default -> ""; };
                     location=place(offer.opt("availableAtOrFrom"));
+                }
+                JSONObject person=node.optJSONObject("seller");
+                if(person==null && offer!=null) person=offer.optJSONObject("seller");
+                if(person==null) person=node.optJSONObject("author");
+                if(person!=null) {
+                    JSONObject point=person.optJSONObject("contactPoint");
+                    String phone=ContactParser.phone(person.optString("telephone",point==null?"":point.optString("telephone","")));
+                    String email=ContactParser.email(person.optString("email",point==null?"":point.optString("email","")));
+                    String wa=ContactParser.whatsappNumber(person.optString("url",""));
+                    if(wa.isEmpty()) wa=ContactParser.whatsappNumber(person.optString("sameAs",""));
+                    String name=person.optString("name",""); if(name.length()>100) name=name.substring(0,100);
+                    contacts=new com.keepr.app.domain.ContactDetails(name,phone,email,wa,"Published contact data · review before contacting");
                 }
                 if(location.isEmpty()) location=place(node.opt("contentLocation"));
                 if(location.isEmpty()) location=place(node.opt("location"));

@@ -379,7 +379,7 @@ public final class MainActivity extends Activity {
     }
 
     private TextView itemTitle(SavedItem item, int size) {
-        TextView title=label(item.title(),size,ink); title.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
+        TextView title=label(com.keepr.app.data.PublicationText.clean(item.title()),size,ink); title.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
         title.setMaxLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END); return title;
     }
 
@@ -477,13 +477,13 @@ public final class MainActivity extends Activity {
             try {
                 String input = url.getText().toString().trim();
                 String normalized = input.isEmpty() ? "" : UrlExtractor.normalize(input);
-                if (normalized.isEmpty() && text.getText().toString().trim().isEmpty() && attachments.isEmpty()) { url.setError("Add a link, post text, or shared photo."); return; }
+                if (normalized.isEmpty() && com.keepr.app.data.PublicationText.clean(text.getText().toString()).isEmpty() && attachments.isEmpty()) { url.setError("Add a link, post text, or shared photo."); return; }
                 List<String> tagNames = TagNames.parse(tags.getText().toString());
                 PreviewMetadata snapshot = normalized.equals(previewUrl[0]) ? preview[0] : null;
-                String itemTitle = title.getText().toString().trim();
+                String itemTitle = com.keepr.app.data.PublicationText.clean(title.getText().toString());
                 if (itemTitle.isEmpty()) itemTitle = normalized.isEmpty() ? "Shared post" : java.net.URI.create(normalized).getHost();
                 long now=System.currentTimeMillis(); String id=java.util.UUID.randomUUID().toString();
-                String savedTitle=itemTitle, postText=text.getText().toString().trim(), myNotes=notes.getText().toString().trim();
+                String savedTitle=com.keepr.app.data.PublicationText.clean(itemTitle), postText=com.keepr.app.data.PublicationText.clean(text.getText().toString()), myNotes=notes.getText().toString().trim();
                 String folder=categories.getSelectedItem().toString();
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false); dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);
                 dialog.setCancelable(false);
@@ -499,7 +499,7 @@ public final class MainActivity extends Activity {
                                 myNotes,folder,SavedItem.Status.ACTIVE,normalized.isEmpty() ? SavedItem.PreviewState.READY : SavedItem.PreviewState.PENDING,
                                 failed>0 ? "Some shared photos could not be copied. Share the missing photo again to save it." : "",now,now,
                                 sharedText,java.util.Collections.unmodifiableList(tagNames),java.util.Collections.unmodifiableList(copied),0,0,0,
-                                snapshot==null?"":snapshot.location(),snapshot==null?"":snapshot.productType(),snapshot==null?"":snapshot.pricePeriod(),snapshot==null?"":snapshot.metadataSource());
+                                snapshot==null?"":snapshot.location(),snapshot==null?"":snapshot.productType(),snapshot==null?"":snapshot.pricePeriod(),snapshot==null?"":snapshot.metadataSource(),snapshot==null?com.keepr.app.domain.ContactDetails.EMPTY:snapshot.contacts());
                         store.add(link);
                         if (!normalized.isEmpty()) {
                             try { SnapshotWorker.enqueue(this,id); } catch (Exception ignored) { /* Pending items are scheduled on next launch. */ }
@@ -634,7 +634,7 @@ public final class MainActivity extends Activity {
         } catch (RuntimeException e) { Toast.makeText(this,"Some shared content could not be read",Toast.LENGTH_LONG).show(); }
         text=text.substring(0,Math.min(65536,text.length()));
         List<String> urls=UrlExtractor.extract(text);
-        String sharedText=text; ArrayList<Uri> images=attachments;
+        String sharedText=com.keepr.app.data.PublicationText.clean(text); ArrayList<Uri> images=attachments;
         if (urls.isEmpty()) showEditor("",sharedText,images,false);
         else if (urls.size()==1) showEditor(urls.get(0),sharedText,images,true);
         else new AlertDialog.Builder(this).setTitle("Choose the original post link")

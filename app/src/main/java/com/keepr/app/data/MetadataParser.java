@@ -43,6 +43,7 @@ public final class MetadataParser {
         if (title.isEmpty()) title = doc.title();
         String description=first(meta,"og:description","description","twitter:description");
         if (structured.text.length()>description.length()) description=structured.text;
+        title=PublicationText.clean(title); description=PublicationText.clean(description);
         String price=first(meta,"product:price:amount","og:price:amount","price");
         String currency=first(meta,"product:price:currency","og:price:currency","pricecurrency");
         ListingFacts inferred=ListingFacts.extract(title,description);
@@ -58,7 +59,8 @@ public final class MetadataParser {
                 limit(first(meta, "og:site_name", "application-name"), 500), image,
                 limit(price,100), limit(currency,20),
                 limit(first(meta, "contact", "contact:email", "og:email", "email", "telephone"), 1000), java.util.Collections.unmodifiableList(new java.util.ArrayList<>(images)),Math.max(facebook.expected,images.size()),
-                limit(location,500),limit(productType,100),limit(period,30),source);
+                limit(location,500),limit(productType,100),limit(period,30),source,ContactParser.prefer(structured.contacts,ContactParser.extract(title,description,
+                    "Phone: "+first(meta,"telephone","contact:phone"),first(meta,"contact:email","og:email","email"),first(meta,"contact"))));
     }
     private static String first(Map<String, String> values, String... keys) {
         for (String key : keys) if (values.containsKey(key)) return values.get(key);

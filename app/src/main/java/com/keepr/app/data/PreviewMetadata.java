@@ -1,7 +1,13 @@
 package com.keepr.app.data;
 
+import com.keepr.app.domain.ContactDetails;
+
 public record PreviewMetadata(String resolvedUrl, String title, String description, String siteName,
+        String imageUrl, String price, String currency, String contact, java.util.List<String> imageUrls, int expectedPhotoCount, String location, String productType, String pricePeriod, String metadataSource, ContactDetails contacts) {
+    public PreviewMetadata(String resolvedUrl, String title, String description, String siteName,
         String imageUrl, String price, String currency, String contact, java.util.List<String> imageUrls, int expectedPhotoCount, String location, String productType, String pricePeriod, String metadataSource) {
+        this(resolvedUrl,title,description,siteName,imageUrl,price,currency,contact,imageUrls,expectedPhotoCount,location,productType,pricePeriod,metadataSource,ContactDetails.EMPTY);
+    }
     public PreviewMetadata(String resolvedUrl,String title,String description,String siteName,String imageUrl,String price,String currency,String contact,java.util.List<String> imageUrls,int expectedPhotoCount) {
         this(resolvedUrl,title,description,siteName,imageUrl,price,currency,contact,imageUrls,expectedPhotoCount,"","","","");
     }

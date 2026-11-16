@@ -44,10 +44,15 @@ public record ListingFacts(String price,String currency,String period,String loc
         if(!ambiguous && amounts.size()==1) { String[] amount=amounts.iterator().next().split("\t",-1); price=amount[0];currency=amount[1];period=amount[2]; }
         Set<String> places=new LinkedHashSet<>(); Matcher place=PLACE.matcher(text);
         while(place.find()) { String value=place.group(1).trim(); if(!value.contains("$") && !value.matches(".*\\d{5,}.*")) places.add(value); }
-        String normalized=Normalizer.normalize(text,Normalizer.Form.NFD).replaceAll("\\p{M}","").toLowerCase(Locale.ROOT);
+        String normalized=Normalizer.normalize(text.replaceAll("(?imu)(?:tel[eé]fono|phone|celular)\\s*[:.]?\\s*\\+?[0-9 ()-]{7,}",""),Normalizer.Form.NFD).replaceAll("\\p{M}","").toLowerCase(Locale.ROOT);
         Set<String> types=new LinkedHashSet<>();
         for(String[] type:TYPES) if(Pattern.compile("\\b(?:"+type[1]+")\\b").matcher(normalized).find()) types.add(type[0]);
-        return new ListingFacts(price,currency,period,places.size()==1?places.iterator().next():"",types.size()==1?types.iterator().next():"");
+        String location=places.size()==1?places.iterator().next():"";
+        if(places.size()<=1) {
+            String havana=HavanaLocations.extract(location.isEmpty()?text:location);
+            if(!havana.isEmpty()) location=havana;
+        }
+        return new ListingFacts(price,currency,period,location,types.size()==1?types.iterator().next():"");
     }
     public static String normalizeAmount(String input) {
         String value=input.trim();

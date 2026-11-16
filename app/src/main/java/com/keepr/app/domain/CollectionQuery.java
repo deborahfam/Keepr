@@ -21,7 +21,7 @@ public final class CollectionQuery {
             if(!tag.isEmpty() && item.tags().stream().noneMatch(value->value.equalsIgnoreCase(tag))) continue;
             if(!source.isEmpty() && !source(item).equalsIgnoreCase(source)) continue;
             if(item.createdAt()<fromInclusive || item.createdAt()>=untilExclusive) continue;
-            String text=String.join(" ",item.title(),item.url(),item.notes(),item.description(),item.sharedText(),item.location(),item.productType(),item.price(),String.join(" ",item.tags())).toLowerCase(Locale.ROOT);
+            String text=String.join(" ",item.title(),item.url(),item.notes(),item.description(),item.sharedText(),item.location(),item.productType(),item.price(),item.contacts().name(),item.contacts().phone(),item.contacts().email(),item.contacts().whatsapp(),String.join(" ",item.tags())).toLowerCase(Locale.ROOT);
             if(!text.contains(needle)) continue;
             result.add(item);
         }

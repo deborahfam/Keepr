@@ -6,6 +6,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import com.keepr.app.domain.SavedItem;
 import com.keepr.app.domain.CachedMedia;
+import com.keepr.app.domain.ContactDetails;
 import com.keepr.app.domain.SavedItemRepository;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -29,7 +30,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     @Override public List<SavedItem> load() throws JSONException {
         SQLiteDatabase db = helper.getWritableDatabase();
         migrateLegacy(db);
-        backfillListingFacts(db);
+        backfillListingFacts(db); backfillContacts(db); backfillLocations(db);
         return query(db);
     }
     private List<SavedItem> query(SQLiteDatabase db) { return query(db,null); }
@@ -38,15 +39,15 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     }
     private List<SavedItem> queryRows(SQLiteDatabase db,String where,String[] args,String order,String limit) {
         List<SavedItem> items=new ArrayList<>();
-        try(Cursor c=db.rawQuery("SELECT id,url,title,description,site_name,image_url,price,currency,contact,notes,(SELECT name FROM Category WHERE id=SavedItem.category_id),status,preview_state,preview_error,created_at,updated_at,shared_text,expected_photos,(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='PENDING'),(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='FAILED'),location,product_type,price_period,metadata_source FROM SavedItem WHERE "+where+" ORDER BY "+order+limit,args)) {
+        try(Cursor c=db.rawQuery("SELECT id,url,title,description,site_name,image_url,price,currency,contact,notes,(SELECT name FROM Category WHERE id=SavedItem.category_id),status,preview_state,preview_error,created_at,updated_at,shared_text,expected_photos,(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='PENDING'),(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='FAILED'),location,product_type,price_period,metadata_source,contact_name,contact_phone,contact_email,contact_whatsapp,contact_source FROM SavedItem WHERE "+where+" ORDER BY "+order+limit,args)) {
             while (c.moveToNext()) items.add(new SavedItem(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
                     c.getString(4), c.getString(5), c.getString(6), c.getString(7), c.getString(8), c.getString(9),
                     c.getString(10), SavedItem.Status.valueOf(c.getString(11)), SavedItem.PreviewState.valueOf(c.getString(12)),
-                    c.getString(13), c.getLong(14), c.getLong(15), c.getString(16), tags(db, c.getString(0)), media(db, c.getString(0)),c.getInt(17),c.getInt(18),c.getInt(19),c.getString(20),c.getString(21),c.getString(22),c.getString(23)));
+                    c.getString(13), c.getLong(14), c.getLong(15), c.getString(16), tags(db, c.getString(0)), media(db, c.getString(0)),c.getInt(17),c.getInt(18),c.getInt(19),c.getString(20),c.getString(21),c.getString(22),c.getString(23),new ContactDetails(c.getString(24),c.getString(25),c.getString(26),c.getString(27),c.getString(28))));
         }
         return Collections.unmodifiableList(items);
     }
-    public void initialize() throws JSONException { SQLiteDatabase db=helper.getWritableDatabase(); migrateLegacy(db); backfillListingFacts(db); }
+    public void initialize() throws JSONException { SQLiteDatabase db=helper.getWritableDatabase(); migrateLegacy(db); backfillListingFacts(db); backfillContacts(db); backfillLocations(db); }
     public record Page(List<SavedItem> items,int total) {}
     public Page page(FeedQuery filter,int offset,int size) {
         if(offset<0 || size<1 || size>100) throw new IllegalArgumentException("Invalid page bounds");
@@ -123,18 +124,60 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
             db.setTransactionSuccessful();
         } finally { db.endTransaction(); }
     }
+    private void backfillLocations(SQLiteDatabase db) {
+        db.beginTransaction();
+        try(Cursor cursor=db.rawQuery("SELECT id,title,description,shared_text,location FROM SavedItem WHERE location_version=0 AND metadata_edited=0",null)) {
+            while(cursor.moveToNext()) {
+                ContentValues values=new ContentValues(); values.put("location_version",1);
+                if(cursor.getString(4).isEmpty()) {
+                    String location=ListingFacts.extract(cursor.getString(1),cursor.getString(2),cursor.getString(3)).location();
+                    if(!location.isEmpty()) values.put("location",location);
+                }
+                db.update("SavedItem",values,"id=? AND metadata_edited=0",new String[]{cursor.getString(0)});
+            }
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+    }
+    private static ContentValues contactValues(ContactDetails contacts,boolean onlyPresent) {
+        ContentValues values=new ContentValues();
+        if(!onlyPresent || !contacts.name().isEmpty()) values.put("contact_name",contacts.name());
+        if(!onlyPresent || !contacts.phone().isEmpty()) values.put("contact_phone",contacts.phone());
+        if(!onlyPresent || !contacts.email().isEmpty()) values.put("contact_email",contacts.email());
+        if(!onlyPresent || !contacts.whatsapp().isEmpty()) values.put("contact_whatsapp",contacts.whatsapp());
+        values.put("contact_source",contacts.source()); return values;
+    }
+    private void backfillContacts(SQLiteDatabase db) {
+        db.beginTransaction();
+        try(Cursor cursor=db.rawQuery("SELECT id,title,description,shared_text,contact FROM SavedItem WHERE contact_source='' AND contact_edited=0",null)) {
+            while(cursor.moveToNext()) {
+                ContactDetails contacts=ContactParser.saved(cursor.getString(1),cursor.getString(2),cursor.getString(3),cursor.getString(4));
+                db.update("SavedItem",contactValues(contacts,false),"id=? AND contact_edited=0",new String[]{cursor.getString(0)});
+            }
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+    }
+    public void editContacts(String id,ContactDetails contacts) {
+        ContactDetails valid=ContactParser.validated(contacts.name(),contacts.phone(),contacts.email(),contacts.whatsapp());
+        ContentValues values=contactValues(valid,false); values.put("contact_edited",1); values.put("updated_at",System.currentTimeMillis());
+        // Clearing a channel explicitly must not resurrect the old untyped contact on capture.
+        values.put("contact","");
+        if(helper.getWritableDatabase().update("SavedItem",values,"id=?",new String[]{id})!=1) throw new IllegalStateException("This post no longer exists.");
+        emit();
+    }
     private void insert(SQLiteDatabase db, SavedItem item) {
         String folderId=item.categoryId()==null?null:ensureFolder(db,item.categoryId());
         ContentValues v = new ContentValues();
-        v.put("id", item.id()); v.put("url", item.url()); v.put("title", item.title());
-        v.put("description", item.description()); v.put("site_name", item.siteName()); v.put("image_url", item.imageUrl());
+        v.putAll(contactValues(ContactParser.prefer(item.contacts(),ContactParser.saved(item.title(),item.description(),item.sharedText(),item.contact())),false));
+        v.put("id", item.id()); v.put("url", item.url()); v.put("title", PublicationText.clean(item.title()));
+        v.put("description", PublicationText.clean(item.description())); v.put("site_name", item.siteName()); v.put("image_url", item.imageUrl());
         ListingFacts facts=ListingFacts.extract(item.title(),item.description(),item.sharedText());
         v.put("price",item.price().isEmpty()?facts.price():item.price()); v.put("currency",item.price().isEmpty()?facts.currency():item.currency()); v.put("contact",item.contact());
+        v.put("location_version",1);
         v.put("location",item.location().isEmpty()?facts.location():item.location());
         v.put("product_type",item.productType().isEmpty()?facts.productType():item.productType());
         v.put("price_period",item.pricePeriod().isEmpty() && item.price().isEmpty()?facts.period():item.pricePeriod());
         v.put("metadata_source",item.metadataSource().isEmpty()?"Suggested from saved text; review these details.":item.metadataSource());
-        v.put("shared_text", item.sharedText()); v.put("category_id", folderId); v.put("notes", item.notes()); v.put("status", item.status().name());
+        v.put("shared_text", PublicationText.clean(item.sharedText())); v.put("category_id", folderId); v.put("notes", item.notes()); v.put("status", item.status().name());
         v.put("preview_state", item.previewState().name()); v.put("preview_error", item.previewError());
         v.put("created_at", item.createdAt()); v.put("updated_at", item.updatedAt());
         db.insertOrThrow("SavedItem", null, v);
@@ -336,14 +379,18 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
             ContentValues title=new ContentValues(); title.put("title",preview.title());
             helper.getWritableDatabase().update("SavedItem",title,"id=? AND title_edited=0 AND title=?",new String[]{id,item.title()});
         }
-        if (!preview.description().isEmpty() && (item.description().isEmpty() || item.description().equals(item.sharedText()))) v.put("description", preview.description());
+        if (!preview.description().isEmpty() && (item.description().isEmpty() || item.description().equals(item.sharedText()))) v.put("description", PublicationText.clean(preview.description()));
         v.put("expected_photos",preview.expectedPhotoCount()); v.put("image_url",preview.imageUrl()); v.put("site_name",preview.siteName());
         ContentValues facts=new ContentValues();
         if(!preview.price().isEmpty()) { facts.put("price",preview.price()); facts.put("currency",preview.currency()); facts.put("price_period",preview.pricePeriod()); }
         if(!preview.location().isEmpty()) facts.put("location",preview.location());
         if(!preview.productType().isEmpty()) facts.put("product_type",preview.productType());
         if(facts.size()>0) { facts.put("metadata_source",preview.metadataSource()); helper.getWritableDatabase().update("SavedItem",facts,"id=? AND metadata_edited=0",new String[]{id}); }
-        if(!preview.contact().isEmpty()) v.put("contact",preview.contact());
+        ContactDetails contacts=ContactParser.prefer(preview.contacts(),ContactParser.saved(preview.title(),preview.description(),"",preview.contact()));
+        if(!contacts.isEmpty()) {
+            ContentValues contactUpdate=contactValues(contacts,true);
+            helper.getWritableDatabase().update("SavedItem",contactUpdate,"id=? AND contact_edited=0",new String[]{id});
+        }
         v.put("updated_at",System.currentTimeMillis());
         helper.getWritableDatabase().update("SavedItem",v,"id=?",new String[]{id});
     }

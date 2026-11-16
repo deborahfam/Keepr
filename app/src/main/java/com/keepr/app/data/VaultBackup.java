@@ -23,7 +23,7 @@ public final class VaultBackup {
         SQLiteDatabase db=repository.backupDatabase();
         db.beginTransaction(); // Keep rows and referenced files stable against concurrent capture/deletion.
         try(ZipOutputStream zip=new ZipOutputStream(new BufferedOutputStream(output))) {
-            JSONObject manifest=new JSONObject(); manifest.put("format","keepr"); manifest.put("version",3);
+            JSONObject manifest=new JSONObject(); manifest.put("format","keepr"); manifest.put("version",4);
             for(String table:TABLES) {
                 JSONArray rows=new JSONArray();
                 try(Cursor c=db.query(table,null,null,null,null,null,null)) {
@@ -65,7 +65,7 @@ public final class VaultBackup {
             if(entry==null || !entry.getName().equals("manifest.json")) throw new IOException("This is not a Keepr backup.");
             ByteArrayOutputStream manifestBytes=new ByteArrayOutputStream(); copy(zip,manifestBytes,MANIFEST_LIMIT);
             JSONObject manifest=new JSONObject(manifestBytes.toString(StandardCharsets.UTF_8.name()));
-            if(!manifest.getString("format").equals("keepr") || (manifest.getInt("version")<1 || manifest.getInt("version")>3)) throw new IOException("Unsupported backup version.");
+            if(!manifest.getString("format").equals("keepr") || (manifest.getInt("version")<1 || manifest.getInt("version")>4)) throw new IOException("Unsupported backup version.");
             if(manifest.getInt("version")==1) manifest.put("Trash",new JSONArray());
             // SQLite validates columns, required values, uniqueness, enums and foreign keys in isolation.
             for(String table:TABLES) {
@@ -77,6 +77,10 @@ public final class VaultBackup {
                     if(table.equals("SavedItem") && manifest.getInt("version")<3) {
                         for(String key:new String[]{"location","product_type","price_period","metadata_source"}) row.put(key,"");
                         row.put("metadata_edited",0);
+                    }
+                    if(table.equals("SavedItem") && manifest.getInt("version")<4) {
+                        for(String key:new String[]{"contact_name","contact_phone","contact_email","contact_whatsapp","contact_source"}) row.put(key,"");
+                        row.put("contact_edited",0); row.put("location_version",0);
                     }
                     if(row.length()!=columns.size()) throw new IOException("Incomplete backup metadata.");
                     ContentValues values=new ContentValues();

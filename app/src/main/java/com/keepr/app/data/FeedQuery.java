@@ -19,7 +19,7 @@ public record FeedQuery(String folder,String text,SavedItem.Status status,String
         if(!source.isEmpty()) { where.append(" AND ("+SOURCE+")=? COLLATE NOCASE"); args.add(source); }
         where.append(" AND created_at>=? AND created_at<?"); args.add(Long.toString(from)); args.add(Long.toString(until));
         if(!text.trim().isEmpty()) {
-            where.append(" AND instr(lower(title||' '||url||' '||notes||' '||description||' '||shared_text||' '||location||' '||product_type||' '||price||' '||COALESCE((SELECT group_concat(t.name,' ') FROM SavedItemTag it JOIN Tag t ON t.id=it.tag_id WHERE it.saved_item_id=SavedItem.id),'')),lower(?))>0"); args.add(text.trim());
+            where.append(" AND instr(lower(title||' '||url||' '||notes||' '||description||' '||shared_text||' '||location||' '||product_type||' '||price||' '||contact_name||' '||contact_phone||' '||contact_email||' '||contact_whatsapp||' '||COALESCE((SELECT group_concat(t.name,' ') FROM SavedItemTag it JOIN Tag t ON t.id=it.tag_id WHERE it.saved_item_id=SavedItem.id),'')),lower(?))>0"); args.add(text.trim());
         }
         String order="created_at "+(sort==CollectionQuery.Sort.OLDEST?"ASC":"DESC")+",id";
         if(sort==CollectionQuery.Sort.PRICE_LOW || sort==CollectionQuery.Sort.PRICE_HIGH) {

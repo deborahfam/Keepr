@@ -19,4 +19,8 @@
     <item name="update_status" type="id" />
     <item name="check_updates" type="id" />
     <item name="download_update" type="id" />
+    <item name="contact_call" type="id" />
+    <item name="contact_email" type="id" />
+    <item name="contact_whatsapp" type="id" />
+    <item name="edit_contact" type="id" />
 </resources>
