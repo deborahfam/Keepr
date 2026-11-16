@@ -52,9 +52,9 @@ public final class PostDetailActivity extends Activity {
         back.setOnClickListener(v->finish()); toolbar.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));
         TextView title=text("Saved find",18,ink); title.setTypeface(null,Typeface.BOLD);
         LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(0,-2,1); titleParams.leftMargin=dp(12); toolbar.addView(title,titleParams);
-        TextView local=text("OFFLINE VAULT",10,accent); local.setTypeface(null,Typeface.BOLD); toolbar.addView(local); root.addView(toolbar);
-        tabs=new LinearLayout(this); tabs.setPadding(dp(24),dp(4),dp(24),dp(8)); root.addView(tabs);
-        scroll=new ScrollView(this); body=column(); body.setPadding(dp(24),dp(12),dp(24),dp(24)); scroll.addView(body);
+        root.addView(toolbar);
+        tabs=new LinearLayout(this); tabs.setPadding(dp(4),dp(4),dp(4),dp(4)); tabs.setBackground(shape(UiStyles.SURFACE,18));
+        scroll=new ScrollView(this); body=column(); body.setPadding(dp(20),dp(8),dp(20),dp(24)); scroll.addView(body);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root); renderTabs(); body.addView(text("Opening saved post…",16,muted));
         updates=WorkManager.getInstance(this).getWorkInfosByTagLiveData("keepr-snapshot");
@@ -76,7 +76,7 @@ public final class PostDetailActivity extends Activity {
     private void renderTabs() {
         tabs.removeAllViews();
         for(String name:new String[]{"Post","Photos","Info"}) {
-            Button button=button(name,tab.equals(name)); button.setId(name.equals("Post")?R.id.detail_tab_post:name.equals("Photos")?R.id.detail_tab_photos:R.id.detail_tab_info); button.setSelected(tab.equals(name));
+            Button button=button(name,false); button.setBackground(shape(tab.equals(name)?UiStyles.SOFT:UiStyles.SURFACE,14)); button.setTextColor(tab.equals(name)?accent:muted); button.setId(name.equals("Post")?R.id.detail_tab_post:name.equals("Photos")?R.id.detail_tab_photos:R.id.detail_tab_info); button.setSelected(tab.equals(name));
             LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(48),1); params.rightMargin=dp(6);
             tabs.addView(button,params); button.setOnClickListener(v->{ tab=name; renderTabs(); render(); scroll.scrollTo(0,0); });
         }
@@ -84,12 +84,17 @@ public final class PostDetailActivity extends Activity {
     private void render() {
         if(item==null) return;
         body.removeAllViews();
+        if(tab.equals("Post") || tab.equals("Photos")) gallery();
+        if(tabs.getParent()!=null) ((ViewGroup)tabs.getParent()).removeView(tabs);
+        LinearLayout.LayoutParams tabParams=new LinearLayout.LayoutParams(-1,-2); tabParams.topMargin=dp(12); tabParams.bottomMargin=dp(14); body.addView(tabs,tabParams);
         heading=text(item.title(),28,ink); heading.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); body.addView(heading);
         TextView location=text((item.categoryId()==null ? "Other" : item.categoryId())+"  ·  "+status(item.status()),13,accent); body.addView(location);
         if(!item.tags().isEmpty()) body.addView(text("#"+String.join("  #",item.tags()),13,accent));
         if(tab.equals("Post") || tab.equals("Photos")) {
-            gallery();
             if(tab.equals("Post")) {
+                boolean incomplete=progress.failed()>0 || progress.unexposed()>0 || progress.pending()>0 || item.previewState()!=SavedItem.PreviewState.READY;
+                TextView capture=text(captureSummary()+"\nDownloaded photos remain available offline.",13,incomplete?0xffF4C567:0xffA5D5BD);
+                capture.setPadding(dp(16),dp(14),dp(16),dp(14)); capture.setBackground(shape(incomplete?0xff2C2312:0xff10201A,16)); body.addView(capture,block());
                 if(!item.price().isEmpty()) body.addView(text(item.currency()+" "+item.price(),24,accent));
                 section("Publication",item.description().isEmpty() ? item.sharedText() : item.description());
                 if(!item.sharedText().isEmpty() && !item.sharedText().equals(item.description())) section("Original shared text",item.sharedText());
@@ -114,13 +119,13 @@ public final class PostDetailActivity extends Activity {
         }
         Button changeStatus=button(getString(R.string.change_status)+": "+StatusLabels.label(this,item.status()),false);
         changeStatus.setId(R.id.change_status); body.addView(changeStatus,block()); changeStatus.setOnClickListener(v->showStatusPicker());
-        Button edit=button(getString(R.string.edit_post),false); body.addView(edit,block());
+        Button edit=button(getString(R.string.edit_post),true); body.addView(edit,block());
         edit.setOnClickListener(v->showEdit(null));
         Button addPhotos=button(getString(R.string.add_photos),false); body.addView(addPhotos,block());
         addPhotos.setOnClickListener(v->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT)
                 .addCategory(Intent.CATEGORY_OPENABLE).setType("image/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true),42));
         if(!item.url().isEmpty()) {
-            Button open=button(getString(R.string.open_link),true); body.addView(open,block());
+            Button open=button(getString(R.string.open_link),false); body.addView(open,block());
             open.setOnClickListener(v->{ try { startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(item.url()))); }
                 catch(ActivityNotFoundException e) { Toast.makeText(this,"No browser installed",Toast.LENGTH_SHORT).show(); } });
             Button retry=button(getString(R.string.retry_missing_photos),false); body.addView(retry,block());
@@ -168,11 +173,13 @@ public final class PostDetailActivity extends Activity {
                 catch(Exception error) { String message=error instanceof IllegalArgumentException || error instanceof IllegalStateException?error.getMessage():"Could not save changes. Please try again.";
                     runOnUiThread(()->{ if(!isDestroyed()) { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true); Toast.makeText(this,message,Toast.LENGTH_LONG).show(); } }); }
             });
-        })); editDialog.show();
+        })); editDialog.show(); UiStyles.styleEditor(editDialog);
     }
     private EditText editField(LinearLayout form,int label,String value,boolean multiline) {
         form.addView(text(getString(label),14,ink)); EditText input=new EditText(this); input.setSingleLine(!multiline); if(multiline) input.setMinLines(3);
-        input.setText(value); input.setContentDescription(getString(label)); form.addView(input); return input;
+        input.setText(value); input.setContentDescription(getString(label));
+        input.setTextColor(ink); input.setTextSize(16); input.setPadding(dp(14),dp(12),dp(14),dp(12)); input.setBackground(UiStyles.surface(this,UiStyles.SURFACE,14,UiStyles.LINE));
+        form.addView(input); return input;
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
@@ -205,7 +212,6 @@ public final class PostDetailActivity extends Activity {
         return result;
     }
     private void gallery() {
-        TextView summary=text(captureSummary(),12,muted); body.addView(summary);
         if(item.media().isEmpty()) {
             TextView empty=text(item.previewState()==SavedItem.PreviewState.PENDING ? "Photos are being fetched. You can leave this screen; downloads continue in the background." : "No photos have been saved for this post.",15,muted);
             empty.setPadding(dp(20),dp(30),dp(20),dp(30)); empty.setBackground(shape(UiStyles.SOFT,18)); body.addView(empty); return;
@@ -285,7 +291,7 @@ public final class PostDetailActivity extends Activity {
     }
     private void section(String name,String value) {
         if(value==null || value.isEmpty()) return;
-        TextView caption=text(name,13,accent); caption.setTypeface(null,Typeface.BOLD); caption.setPadding(0,dp(22),0,dp(6)); body.addView(caption);
+        TextView caption=text(name,13,muted); caption.setTypeface(null,Typeface.BOLD); caption.setPadding(0,dp(22),0,dp(6)); body.addView(caption);
         TextView content=text(value,16,ink); content.setTextIsSelectable(true); content.setLineSpacing(dp(3),1); body.addView(content);
     }
     private String status(SavedItem.Status status) { return StatusLabels.label(this,status); }

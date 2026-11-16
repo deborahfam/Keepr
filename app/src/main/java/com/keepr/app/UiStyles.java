@@ -10,10 +10,10 @@ import android.widget.TextView;
 
 /** Shared, accessible native controls for Keepr's screens. */
 final class UiStyles {
-    static final int INK = 0xffF3EDE8, MUTED = 0xffB9AEB4, ACCENT = 0xffB83F4F;
-    static final int ACCENT_TEXT = 0xffFF98A5, SURFACE = 0xff242126;
-    static final int SOFT = 0xff38262D, PEACH = 0xff493139;
-    static final int PAPER = 0xff171518, LINE = 0xff443A41;
+    static final int INK = 0xffF5F3F4, MUTED = 0xffAAA5A8, ACCENT = 0xffE53940;
+    static final int ACCENT_TEXT = 0xffFF98A5, SURFACE = 0xff131315;
+    static final int SOFT = 0xff3B191F, PEACH = 0xff493139;
+    static final int PAPER = 0xff09090B, LINE = 0xff302D31;
     private UiStyles() { }
     static int dp(Context context, int value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
@@ -30,11 +30,23 @@ final class UiStyles {
         button.setTextColor(new ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{}},
                 new int[]{primary ? 0xffC2A8AE : 0xff958990, primary ? 0xffffffff : ACCENT_TEXT}));
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33FF98A5),
-                surface(context, primary ? ACCENT : SOFT, 18, 0), surface(context, 0xffffffff, 18, 0)));
+                surface(context, primary ? ACCENT : SURFACE, 16, primary ? 0 : LINE), surface(context, 0xffffffff, 18, 0)));
         button.setPadding(dp(context, 14), dp(context, 10), dp(context, 14), dp(context, 10));
         button.setMinWidth(0); button.setMinimumWidth(0);
         button.setMinHeight(dp(context, 48)); button.setMinimumHeight(dp(context, 48));
         button.setStateListAnimator(null); return button;
+    }
+    static void styleEditor(android.app.AlertDialog dialog) {
+        android.view.Window window=dialog.getWindow();
+        if(window!=null) {
+            window.setBackgroundDrawableResource(android.R.color.transparent);
+            window.setBackgroundDrawable(surface(dialog.getContext(),PAPER,24,LINE));
+            window.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT,android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        }
+        Button save=dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE);
+        save.setTextColor(0xffffffff); save.setBackground(surface(dialog.getContext(),ACCENT,14,0));
+        save.setPadding(dp(dialog.getContext(),24),dp(dialog.getContext(),10),dp(dialog.getContext(),24),dp(dialog.getContext(),10));
     }
     static TextView text(Context context, String value, int size, int color) {
         TextView text = new TextView(context); text.setText(value); text.setTextSize(size); text.setTextColor(color);

@@ -7,8 +7,8 @@ android {
         minSdk = 26
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 6
-        versionName = "0.6.0"
+        versionCode = providers.gradleProperty("keeprVersionCode").orElse("7").get().toInt()
+        versionName = providers.gradleProperty("keeprVersionName").orElse("0.7.0").get()
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true

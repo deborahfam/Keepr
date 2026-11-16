@@ -2,17 +2,27 @@
 
 An offline Android vault for deals, property listings, and marketplace/social posts. Native Java 17 / Android platform UI, Android 8.0+ (API 26), SQLite, WorkManager, OkHttp, and jsoup.
 
+## Automatic GitHub releases
+
+Pushing/synchronizing commits to `main` runs the Android workflow. After compilation, lint, unit tests and schema tests pass, GitHub publishes an APK and SHA-256 checksum in Releases. Pull requests and other branches only run validation. Manual runs on `main` can also publish.
+
+CI versions use `0.7.<workflow run number>` with Android version code `1000 + run number`. Re-running a completed publication does not overwrite its assets. The workflow skips superseded commits, and exposes a release to the app updater only after both assets are uploaded. Keep the Android workflow identity and version-code sequence when changing the version series. Local builds retain version 0.7.0/code 7 unless `-PkeeprVersionName=... -PkeeprVersionCode=...` are supplied; use a published APK to update a device already running a newer CI build.
+
+Repository secret `KEEPR_SIGNING_KEYSTORE` contains the base64-encoded existing development keystore. The secret is consumed only by the publication job on `main`, after validation; no signing key is committed to git. The signing certificate is checked against the current installed identity. These are still development-signed debug APKs, not Play Store releases.
+
+The phone discovers published versions through **Settings → Check for updates**. Download and Android’s installation confirmation remain manual.
+
 ## Download and install
 
-Download **Keepr-0.6.0.apk** from [GitHub Releases](https://github.com/deborahfam/Keepr/releases). Open the APK on your Android phone and allow installation from your browser or file manager when Android asks. Android 8.0 or newer is required.
+Download the latest **Keepr-<version>.apk** from [GitHub Releases](https://github.com/deborahfam/Keepr/releases). Open the APK on your Android phone and allow installation from your browser or file manager when Android asks. Android 8.0 or newer is required.
 
 Version 0.6.0 adds **Settings → App updates**. Open **⋯ → Settings** to see the installed version, check the latest public GitHub release, and download a newer APK in your browser. Open the completed download to let Android install it. Update checks happen only when you tap **Check for updates**; they send no saved posts or account credentials. Offline, rate-limit, missing-APK, and already-up-to-date states are shown explicitly. Settings also links to Backup and Trash.
 
 The dark red interface, redesigned launcher icon, cleaner saved-post cards, and remembered **Cards / List** view remain available. Text search and categories stay on the dashboard; advanced filters and bulk selection are in **⋯**.
 
-The release APK uses the existing development signing identity, allowing an in-place update over builds installed from this development machine. It is a debug build, not a production-signed store release. If Android reports a signature conflict, do not uninstall without first exporting a Keepr backup. GitHub Actions build artifacts use the runner’s debug key and are for testing; use the APK attached to a release for updates compatible with the existing installation.
+The release APK uses the existing development signing identity, allowing an in-place update over builds installed from this development machine. It is a debug build, not a production-signed store release. If Android reports a signature conflict, do not uninstall without first exporting a Keepr backup. Pull-request build artifacts use the runner’s debug key and are for testing. Releases published from `main` are re-signed with the existing installation’s key stored in the encrypted `KEEPR_SIGNING_KEYSTORE` repository secret. Use the APK attached to a release for compatible updates.
 
-Each release includes a SHA-256 checksum file. Download the APK and checksum together, then verify on Linux with `sha256sum -c Keepr-0.6.0.apk.sha256`.
+Each release includes a SHA-256 checksum file. Download the APK and checksum together, then verify on Linux with `sha256sum -c Keepr-<version>.apk.sha256`.
 
 ## Share and save
 
@@ -87,7 +97,7 @@ SQLite schema version 6 contains SavedItem (metadata, original shared text, fold
 
 HTTP requests use normal TLS verification, a descriptive User-Agent, no cookies/authorization/proxy, 8-second connect/read timeouts, 15-second per-call timeout, 25-second redirect-chain budget, five redirects maximum, and a 2 MiB decompressed HTML cap. DNS resolution rejects private/local, link-local, multicast, and selected reserved addresses. Redirects are revalidated and reject credentials, non-web schemes, and HTTPS-to-HTTP downgrades. Explicit public HTTP links are permitted and unencrypted. HTML charset/BOM detection is supported.
 
-Data remains in app-private storage. Automatic Android backup and device transfer are excluded; uninstalling removes local data. Use the manual ZIP backup to preserve and transfer your collection. No backend, account, cloud sync, analytics, or release signing is configured.
+Data remains in app-private storage. Automatic Android backup and device transfer are excluded; uninstalling removes local data. Use the manual ZIP backup to preserve and transfer your collection. No backend, account, cloud sync or analytics is configured. GitHub release signing uses the existing development identity as described above.
 
 ## Build and verify
 

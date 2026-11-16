@@ -36,7 +36,7 @@ public final class MainActivity extends Activity {
     private final ExecutorService databaseWorker = Executors.newSingleThreadExecutor();
     private final ExecutorService previewWorker = Executors.newSingleThreadExecutor();
     private LinearLayout cards;
-    private TextView count;
+    private TextView count, collectionSummary;
     private AlertDialog editor;
     private EditText editorUrl, editorTitle, editorNotes, editorText, editorTags;
     private EditText search;
@@ -157,16 +157,17 @@ public final class MainActivity extends Activity {
 
         LinearLayout brand = new LinearLayout(this); brand.setGravity(android.view.Gravity.CENTER_VERTICAL);
         brand.setPadding(dp(24), dp(12), dp(24), dp(12));
-        ImageView mark = new ImageView(this); mark.setImageResource(R.drawable.ic_keepr);
-        mark.setBackground(surface(accent, 14, 0)); mark.setClipToOutline(true);
-        mark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        brand.addView(mark, new LinearLayout.LayoutParams(dp(40), dp(40)));
-        TextView name = label("keepr", 23, ink); name.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1); nameParams.leftMargin = dp(10);
-        brand.addView(name, nameParams);
+        View mark = new View(this); mark.setBackground(surface(accent, 4, 0));
+        brand.addView(mark, new LinearLayout.LayoutParams(dp(10), dp(32)));
+        LinearLayout identity = column();
+        TextView name = label("Keepr", 30, ink); name.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        name.setPadding(0,0,0,0); identity.addView(name);
+        collectionSummary = label("Opening your collection…", 12, muted); identity.addView(collectionSummary);
+        LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1); nameParams.leftMargin = dp(12);
+        brand.addView(identity, nameParams);
         Button menuButton = button("⋯", false); menuButton.setTextSize(24);
         menuButton.setContentDescription("Collection options");
-        menuButton.setBackground(interactive(canvas, 14, 0));
+        menuButton.setBackground(interactive(UiStyles.SURFACE, 16, line));
         brand.addView(menuButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
         menuButton.setOnClickListener(v -> {
             PopupMenu menu = new PopupMenu(this, menuButton);
@@ -174,7 +175,7 @@ public final class MainActivity extends Activity {
             menu.getMenu().add("Filters and sorting").setOnMenuItemClickListener(item -> { collectionControls.showTools(); return true; });
             menu.getMenu().add("Select posts").setOnMenuItemClickListener(item -> { collectionControls.toggleSelection(); return true; });
             menu.getMenu().add("Clear search and filters").setOnMenuItemClickListener(item -> {
-                query=""; statusFilter=null; collectionControls.reset(); search.setText(""); statuses.setSelection(0); renderCards(); return true;
+                category="All"; updateFilters(); query=""; statusFilter=null; collectionControls.reset(); search.setText(""); statuses.setSelection(0); renderCards(); return true;
             });
             menu.getMenu().add("Manage folders").setOnMenuItemClickListener(item -> { collectionControls.showFolders(); return true; });
             menu.getMenu().add(R.string.backup_restore).setOnMenuItemClickListener(item -> { startActivity(new Intent(this, BackupActivity.class)); return true; });
@@ -186,6 +187,10 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setClipToPadding(false);
         LinearLayout content = column(); content.setPadding(dp(20), 0, dp(20), dp(24));
         scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        Button add = button("＋  Save new post", true);
+        add.setOnClickListener(v -> showEditor(""));
+        LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(-1, dp(54)); addParams.bottomMargin=dp(16);
+        content.addView(add, addParams);
         LinearLayout searchRow = new LinearLayout(this); searchRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         searchRow.setBackground(surface(UiStyles.SURFACE, 16, line));
         search = new EditText(this); search.setSingleLine(true);
@@ -214,6 +219,11 @@ public final class MainActivity extends Activity {
             public void onTextChanged(CharSequence s, int start, int before, int count) { query = s.toString(); clearSearch.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE); renderCards(); }
             public void afterTextChanged(Editable e) {}
         });
+        LinearLayout categoryHeading = new LinearLayout(this); categoryHeading.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        categoryHeading.setPadding(0,dp(12),0,0);
+        categoryHeading.addView(label("Categories",14,muted),new LinearLayout.LayoutParams(0,-2,1));
+        Button manage=button("Manage",false); manage.setBackgroundColor(Color.TRANSPARENT); manage.setOnClickListener(v->collectionControls.showFolders());
+        categoryHeading.addView(manage); content.addView(categoryHeading);
         HorizontalScrollView filters = new HorizontalScrollView(this); filters.setHorizontalScrollBarEnabled(false);
         filters.setPadding(0, dp(8), 0, dp(6));
         folderChips = new LinearLayout(this);
@@ -232,8 +242,10 @@ public final class MainActivity extends Activity {
         LinearLayout collectionHeading = new LinearLayout(this);
         collectionHeading.setGravity(android.view.Gravity.CENTER_VERTICAL);
         collectionHeading.setPadding(0, dp(14), 0, dp(14));
-        count = label("", 16, ink); count.setTypeface(null, Typeface.BOLD);
-        collectionHeading.addView(count, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout collectionTitle=column();
+        TextView savedHeading=label("Your saves",20,ink); savedHeading.setTypeface(null,Typeface.BOLD); collectionTitle.addView(savedHeading);
+        count = label("", 12, muted); collectionTitle.addView(count);
+        collectionHeading.addView(collectionTitle, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout viewChoices = new LinearLayout(this);
         viewChoices.setPadding(dp(3), dp(3), dp(3), dp(3));
         viewChoices.setBackground(surface(UiStyles.SURFACE, 14, line));
@@ -246,15 +258,10 @@ public final class MainActivity extends Activity {
         content.addView(collectionHeading);
         cards = column(); cards.setId(R.id.collection_items); content.addView(cards);
 
-        LinearLayout dock = column(); dock.setPadding(dp(24), dp(10), dp(24), dp(12));
-        dock.setBackground(surface(canvas, 0, 0));
-        dock.setElevation(dp(2));
-        Button add = button(getString(R.string.save_link), true);
-        add.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_add, 0, 0, 0);
-        add.setCompoundDrawablePadding(dp(10));
-        add.setOnClickListener(v -> showEditor("")); add.setMinHeight(dp(56)); dock.addView(add, new LinearLayout.LayoutParams(-1, -2));
-
-        root.addView(dock); setContentView(root); renderCards();
+        TextView offline=label("Downloaded photos work offline. Some captures may still be pending.",13,0xffA5D5BD);
+        offline.setPadding(dp(14),dp(14),dp(14),dp(14)); offline.setBackground(surface(0xff10201A,16,0));
+        content.addView(offline);
+        setContentView(root); renderCards();
     }
 
     private void rebuildFolderChips() {
@@ -287,7 +294,10 @@ public final class MainActivity extends Activity {
             shown++;
             cards.addView(savedItemView(link));
         }
-        count.setText(shown + (shown == 1 ? " saved find" : " saved finds") + ((!query.isEmpty() || statusFilter!=null || collectionControls.hasFilters()) ? " · filtered" : ""));
+        count.setText(shown + (shown == 1 ? " result" : " results") + ((!query.isEmpty() || statusFilter!=null || collectionControls.hasFilters()) ? " · filtered" : ""));
+        int attention=0;
+        for(SavedItem saved:links) if(saved.previewState()==SavedItem.PreviewState.FAILED || saved.failedPhotos()>0 || saved.expectedPhotos()>saved.media().size()) attention++;
+        collectionSummary.setText(links.size()+" saved"+(attention>0?" · "+attention+" need attention":" · Your personal collection"));
         count.setContentDescription(getResources().getQuantityString(R.plurals.saved_count, shown, shown));
         if (shown == 0) {
             LinearLayout empty = column(); empty.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
@@ -297,8 +307,8 @@ public final class MainActivity extends Activity {
             illustration.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             empty.addView(illustration, new LinearLayout.LayoutParams(dp(160), dp(110)));
             TextView title = label(!storageHealthy ? "Opening your collection…" : links.isEmpty() ? "Keep something good." : "No matching finds", 20, ink);
-            title.setGravity(android.view.Gravity.CENTER); title.setTypeface(Typeface.create("serif", Typeface.NORMAL)); title.setTextSize(26); empty.addView(title);
-            TextView explanation = label(!storageHealthy ? "Your saved posts will appear here." : links.isEmpty() ? "Tap Save a new find to keep a link. You can also share text and photos to Keepr from another app." : "Try another search or clear your filters to see your collection.", 14, muted);
+            title.setGravity(android.view.Gravity.CENTER); title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL)); title.setTextSize(24); empty.addView(title);
+            TextView explanation = label(!storageHealthy ? "Your saved posts will appear here." : links.isEmpty() ? "Tap Save new post to keep a link. You can also share text and photos to Keepr from another app." : "Try another search or clear your filters to see your collection.", 14, muted);
             explanation.setGravity(android.view.Gravity.CENTER); explanation.setLineSpacing(dp(3), 1); empty.addView(explanation);
             if (storageHealthy && !links.isEmpty()) {
                 Button reset = button("Clear search and filters", false);
@@ -322,68 +332,49 @@ public final class MainActivity extends Activity {
         for (Button choice : new Button[]{cardViewButton, listViewButton}) {
             boolean selected = choice == (listView ? listViewButton : cardViewButton);
             choice.setSelected(selected);
-            choice.setTextColor(selected ? Color.WHITE : muted);
-            choice.setBackground(interactive(selected ? accent : UiStyles.SURFACE, 11, 0));
+            choice.setTextColor(selected ? UiStyles.ACCENT_TEXT : muted);
+            choice.setBackground(interactive(selected ? UiStyles.SOFT : UiStyles.SURFACE, 11, 0));
             choice.setTextSize(13);
         }
     }
 
     private LinearLayout savedItemView(SavedItem item) {
-        LinearLayout card = column(); card.setTag(listView ? "list" : "cards");
-        card.setPadding(dp(14), dp(14), dp(14), dp(14));
-        card.setBackground(surface(UiStyles.SURFACE, 20, line));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.bottomMargin = dp(12);
-        card.setLayoutParams(params); collectionControls.addSelection(card, item);
-        String folder = item.categoryId() == null ? "Other" : item.categoryId();
-        if (listView) {
-            LinearLayout row = new LinearLayout(this); row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            LinearLayout openArea = new LinearLayout(this); openArea.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            openArea.setBackground(interactive(UiStyles.SURFACE, 12, 0));
-            openArea.setOnClickListener(v -> showSavedPost(item));
-            openArea.setContentDescription(getString(R.string.view_saved_post) + ": " + item.title());
-            View thumbnail;
-            if (item.media().isEmpty()) {
-                TextView placeholder = label(categorySymbol(folder), 24, categoryColor(folder));
-                placeholder.setGravity(android.view.Gravity.CENTER); placeholder.setBackground(surface(categoryTint(folder), 12, 0)); thumbnail = placeholder;
-            } else thumbnail = photo(item.media().get(0), 72);
-            thumbnail.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            openArea.addView(thumbnail, new LinearLayout.LayoutParams(dp(72), dp(72)));
-            LinearLayout text = column(); text.setPadding(dp(12), 0, dp(4), 0);
-            TextView title = itemTitle(item, 16); title.setPadding(0, 0, 0, dp(4)); text.addView(title);
-            TextView category = label(folder + " · " + StatusLabels.label(this, item.status()), 12, muted);
-            category.setMaxLines(2); category.setEllipsize(android.text.TextUtils.TruncateAt.END); text.addView(category);
-            if (!item.price().isEmpty()) text.addView(label((item.currency() + " " + item.price()).trim(), 15, ink));
-            TextView capture = label(item.captureSummary(), 11, muted); capture.setMaxLines(2); text.addView(capture);
-            openArea.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
-            row.addView(openArea, new LinearLayout.LayoutParams(0, -2, 1)); row.addView(itemMenu(item),new LinearLayout.LayoutParams(dp(48),dp(48)));
-            card.addView(row); return card;
+        LinearLayout card=column(); card.setTag(listView?"list":"cards");
+        card.setPadding(dp(12),dp(12),dp(12),dp(12));
+        card.setBackground(surface(UiStyles.SURFACE,20,line));
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2); params.bottomMargin=dp(12); card.setLayoutParams(params);
+        collectionControls.addSelection(card,item);
+        String folder=item.categoryId()==null?"Other":item.categoryId();
+        LinearLayout row=new LinearLayout(this); row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        int width=listView?68:100, height=listView?90:138;
+        android.widget.FrameLayout cover=new android.widget.FrameLayout(this);
+        cover.setBackground(surface(categoryTint(folder),14,0)); cover.setClipToOutline(true);
+        View thumbnail;
+        if(item.media().isEmpty()) {
+            TextView placeholder=label(categorySymbol(folder),36,categoryColor(folder)); placeholder.setGravity(android.view.Gravity.CENTER);
+            GradientDrawable gradient=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{categoryTint(folder),UiStyles.PAPER});
+            placeholder.setBackground(gradient); thumbnail=placeholder;
+        } else thumbnail=photo(item.media().get(0),height);
+        cover.addView(thumbnail,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        if(!listView && !item.media().isEmpty()) {
+            TextView photos=badge(item.media().size()+" photos",ink,0xdd09090B);
+            android.widget.FrameLayout.LayoutParams pp=new android.widget.FrameLayout.LayoutParams(-2,-2,android.view.Gravity.BOTTOM|android.view.Gravity.CENTER_HORIZONTAL);
+            pp.bottomMargin=dp(8); cover.addView(photos,pp);
         }
-        if (!item.media().isEmpty()) {
-            ImageView cover = photo(item.media().get(0), 160);
-            LinearLayout.LayoutParams coverParams = new LinearLayout.LayoutParams(-1, dp(160)); coverParams.bottomMargin = dp(10);
-            card.addView(cover, coverParams); cover.setOnClickListener(v -> showSavedPost(item));
-            cover.setContentDescription(getString(R.string.view_saved_photos, item.media().size()));
-        }
-        LinearLayout header = new LinearLayout(this); header.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView category = label(folder, 12, categoryColor(folder)); category.setMaxLines(2); category.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        header.addView(category,new LinearLayout.LayoutParams(0,-2,1)); header.addView(itemMenu(item),new LinearLayout.LayoutParams(dp(48),dp(48))); card.addView(header);
-        TextView title = itemTitle(item, 20); card.addView(title);
-        String caption = item.description().isEmpty() ? item.sharedText() : item.description();
-        if (!caption.isEmpty()) {
-            TextView description = label(caption,14,muted); description.setMaxLines(2);
-            description.setEllipsize(android.text.TextUtils.TruncateAt.END); description.setLineSpacing(dp(2),1); card.addView(description);
-        }
-        LinearLayout stateRow = new LinearLayout(this); stateRow.setGravity(android.view.Gravity.CENTER_VERTICAL); stateRow.setPadding(0,dp(8),0,dp(8));
-        stateRow.addView(badge(StatusLabels.label(this,item.status()),UiStyles.ACCENT_TEXT,UiStyles.SOFT));
-        TextView capture=label(item.captureSummary(),11,muted); capture.setPadding(dp(10),0,0,0); capture.setMaxLines(2);
-        stateRow.addView(capture,new LinearLayout.LayoutParams(0,-2,1)); card.addView(stateRow);
-        View divider = new View(this); divider.setBackgroundColor(line); card.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));
-        LinearLayout footer = new LinearLayout(this); footer.setGravity(android.view.Gravity.CENTER_VERTICAL); footer.setPadding(0,dp(6),0,0);
-        TextView price=label(item.price().isEmpty()?"Saved on your device":(item.currency()+" "+item.price()).trim(),item.price().isEmpty()?12:18,item.price().isEmpty()?muted:ink);
-        price.setMaxLines(2); price.setEllipsize(android.text.TextUtils.TruncateAt.END); footer.addView(price,new LinearLayout.LayoutParams(0,-2,1));
-        Button open=button("Open  →",false); open.setBackground(interactive(UiStyles.SURFACE,12,0));
-        open.setContentDescription(getString(R.string.view_saved_post)+": "+item.title()); open.setOnClickListener(v->showSavedPost(item));
-        footer.addView(open); card.addView(footer); return card;
+        cover.setContentDescription(getString(R.string.view_saved_post)+": "+item.title());
+        cover.setOnClickListener(v->showSavedPost(item)); row.addView(cover,new LinearLayout.LayoutParams(dp(width),dp(height)));
+        LinearLayout info=column(); info.setPadding(dp(12),0,0,0);
+        LinearLayout top=new LinearLayout(this); top.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView source=label(item.siteName().isEmpty()?folder:item.siteName(),11,UiStyles.ACCENT_TEXT);
+        source.setMaxLines(1); source.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        top.addView(source,new LinearLayout.LayoutParams(0,-2,1)); top.addView(itemMenu(item),new LinearLayout.LayoutParams(dp(48),dp(48))); info.addView(top);
+        TextView title=itemTitle(item,listView?15:18); title.setPadding(0,0,0,dp(4)); info.addView(title);
+        if(!item.price().isEmpty()) { TextView price=label((item.currency()+" "+item.price()).trim(),listView?14:16,ink); price.setTypeface(null,Typeface.BOLD); info.addView(price); }
+        int statusColor=item.status()==SavedItem.Status.ACTIVE?0xff71D5AD:item.status()==SavedItem.Status.REACHED_OUT?0xffF4C567:muted;
+        TextView status=label("●  "+StatusLabels.label(this,item.status()),11,statusColor); info.addView(status);
+        TextView capture=label(item.captureSummary(),11,muted); capture.setMaxLines(2); capture.setEllipsize(android.text.TextUtils.TruncateAt.END); info.addView(capture);
+        info.setOnClickListener(v->showSavedPost(item));
+        row.addView(info,new LinearLayout.LayoutParams(0,-2,1)); card.addView(row); return card;
     }
 
     private TextView itemTitle(SavedItem item, int size) {
@@ -419,7 +410,8 @@ public final class MainActivity extends Activity {
         if (editor != null) editor.dismiss();
         editorSharedText = sharedText; editorAttachments = new ArrayList<>(attachments);
         LinearLayout form = column(); form.setPadding(dp(24), dp(8), dp(24), dp(16));
-        form.addView(label("Choose a folder and tags. Available text and photos stay on your device.",14,muted));
+        TextView intro=label(attachments.isEmpty()?"Save a link or text to your private collection.":attachments.size()+" shared photos · Ready to save locally",14,UiStyles.ACCENT_TEXT);
+        intro.setPadding(dp(16),dp(16),dp(16),dp(16)); intro.setBackground(surface(UiStyles.SOFT,16,0)); form.addView(intro);
         EditText url = field(form,"Original link (optional for a shared photo)");
         url.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI); url.setText(sharedUrl);
         EditText title = field(form,"Title (optional)");
@@ -524,6 +516,7 @@ public final class MainActivity extends Activity {
         }));
         editor=dialog; editorUrl=url; editorTitle=title; editorNotes=notes; editorText=text; editorTags=tags; editorCategory=categories;
         dialog.show();
+        UiStyles.styleEditor(dialog);
         if (automatic && !sharedUrl.isEmpty()) fetch.performClick();
     }
 
@@ -656,10 +649,10 @@ public final class MainActivity extends Activity {
         catch (ActivityNotFoundException e) { Toast.makeText(this, "No browser is installed", Toast.LENGTH_LONG).show(); }
     }
     private EditText field(LinearLayout form, String hint) {
-        form.addView(label(hint, 12, muted));
+        TextView caption=label(hint,13,muted); caption.setPadding(0,dp(18),0,dp(8)); form.addView(caption);
         EditText input = new EditText(this); input.setHint(hint); input.setSingleLine(true);
         input.setTextSize(15); input.setTextColor(ink); input.setHintTextColor(muted);
-        input.setPadding(dp(14), dp(12), dp(14), dp(12)); input.setBackground(surface(canvas, 12, line));
+        input.setPadding(dp(14), dp(12), dp(14), dp(12)); input.setBackground(surface(UiStyles.SURFACE, 16, line));
         form.addView(input, new LinearLayout.LayoutParams(-1, -2)); input.setMinHeight(dp(52)); return input;
     }
     private GradientDrawable surface(int fill, int radius, int stroke) {

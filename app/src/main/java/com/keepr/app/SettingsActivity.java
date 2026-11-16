@@ -49,18 +49,19 @@ public final class SettingsActivity extends Activity {
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
 
         LinearLayout updates=card(body);
-        updates.addView(UiStyles.text(this,"App updates",23,UiStyles.INK));
+        TextView label=UiStyles.text(this,"KEEPR  /  UPDATES",12,UiStyles.ACCENT_TEXT); updates.addView(label);
+        updates.addView(UiStyles.text(this,"Keep Keepr up to date",24,UiStyles.INK));
         updates.addView(UiStyles.text(this,"Installed version · "+installedVersion,14,UiStyles.MUTED));
         latest=UiStyles.text(this,"",14,UiStyles.ACCENT_TEXT); updates.addView(latest);
         status=UiStyles.text(this,"",16,UiStyles.INK); status.setId(R.id.update_status); status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); updates.addView(status);
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal); progress.setIndeterminate(true); progress.setContentDescription("Checking for updates"); updates.addView(progress);
         checked=UiStyles.text(this,"",12,UiStyles.MUTED); updates.addView(checked);
-        check=UiStyles.button(this,"Check for updates",false); check.setId(R.id.check_updates); addButton(updates,check); check.setOnClickListener(v->checkForUpdates());
+        check=UiStyles.button(this,"Check for updates",true); check.setId(R.id.check_updates); addButton(updates,check); check.setOnClickListener(v->checkForUpdates());
         download=UiStyles.button(this,"Download update",true); download.setId(R.id.download_update); addButton(updates,download);
         download.setOnClickListener(v->{ AppUpdates.Release release=job.release; if(release!=null && !job.checking && !release.downloadUrl().isEmpty()) openWeb(release.downloadUrl()); });
         Button releases=UiStyles.button(this,"View GitHub releases  ↗",false); addButton(updates,releases);
         releases.setOnClickListener(v->openWeb(job.release==null?AppUpdates.RELEASES:job.release.pageUrl()));
-        updates.addView(UiStyles.text(this,"Your browser downloads the APK. Open the completed download to install it, then follow Android’s prompts. Compatible updates keep your saved finds.",13,UiStyles.MUTED));
+        updates.addView(UiStyles.text(this,"Download the APK from GitHub, then open it to install. Compatible updates keep your saved posts and photos.",13,UiStyles.MUTED));
 
         LinearLayout data=card(body); data.addView(UiStyles.text(this,"Your data",21,UiStyles.INK));
         data.addView(UiStyles.text(this,"Posts and photos stay on this device. Keep a backup before changing phones or reinstalling.",14,UiStyles.MUTED));
