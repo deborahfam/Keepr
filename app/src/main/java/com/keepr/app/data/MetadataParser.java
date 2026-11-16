@@ -45,11 +45,20 @@ public final class MetadataParser {
         if (structured.text.length()>description.length()) description=structured.text;
         String price=first(meta,"product:price:amount","og:price:amount","price");
         String currency=first(meta,"product:price:currency","og:price:currency","pricecurrency");
+        ListingFacts inferred=ListingFacts.extract(title,description);
+        String location=structured.location, productType=structured.productType;
+        String period=structured.period;
+        if(price.isEmpty()) { price=structured.price; currency=structured.currency; }
+        if(price.isEmpty()) { price=inferred.price(); currency=inferred.currency(); period=inferred.period(); }
+        if(location.isEmpty()) location=inferred.location();
+        if(productType.isEmpty()) productType=inferred.productType();
+        boolean structuredFields=!structured.price.isEmpty() || !structured.location.isEmpty() || !structured.productType.isEmpty() || !first(meta,"product:price:amount","og:price:amount","price").isEmpty();
+        String source=structuredFields?"Public page data; missing fields suggested from text. Review before relying on them.":"Suggested from publication text. Review before relying on these details.";
         return new PreviewMetadata(url, limit(title, 1000), limit(description,65536),
                 limit(first(meta, "og:site_name", "application-name"), 500), image,
-                limit(price.isEmpty()?structured.price:price,100),
-                limit(currency.isEmpty()?structured.currency:currency,20),
-                limit(first(meta, "contact", "contact:email", "og:email", "email", "telephone"), 1000), java.util.Collections.unmodifiableList(new java.util.ArrayList<>(images)),Math.max(facebook.expected,images.size()));
+                limit(price,100), limit(currency,20),
+                limit(first(meta, "contact", "contact:email", "og:email", "email", "telephone"), 1000), java.util.Collections.unmodifiableList(new java.util.ArrayList<>(images)),Math.max(facebook.expected,images.size()),
+                limit(location,500),limit(productType,100),limit(period,30),source);
     }
     private static String first(Map<String, String> values, String... keys) {
         for (String key : keys) if (values.containsKey(key)) return values.get(key);

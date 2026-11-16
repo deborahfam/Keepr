@@ -33,7 +33,7 @@ public final class PostDetailActivity extends Activity {
     private androidx.lifecycle.Observer<List<WorkInfo>> observer;
     private Dialog photoDialog;
     private AlertDialog editDialog,statusDialog;
-    private EditText editTitle,editNotes,editTags;
+    private EditText editTitle,editNotes,editTags,editPrice,editCurrency,editLocation,editProductType,editPeriod;
     private AutoCompleteTextView editFolder;
     private Bundle pendingEdit;
 
@@ -95,7 +95,7 @@ public final class PostDetailActivity extends Activity {
                 boolean incomplete=progress.failed()>0 || progress.unexposed()>0 || progress.pending()>0 || item.previewState()!=SavedItem.PreviewState.READY;
                 TextView capture=text(captureSummary()+"\nDownloaded photos remain available offline.",13,incomplete?0xffF4C567:0xffA5D5BD);
                 capture.setPadding(dp(16),dp(14),dp(16),dp(14)); capture.setBackground(shape(incomplete?0xff2C2312:0xff10201A,16)); body.addView(capture,block());
-                if(!item.price().isEmpty()) body.addView(text(item.currency()+" "+item.price(),24,accent));
+                listingDetails();
                 section("Publication",item.description().isEmpty() ? item.sharedText() : item.description());
                 if(!item.sharedText().isEmpty() && !item.sharedText().equals(item.description())) section("Original shared text",item.sharedText());
                 section("My notes",item.notes());
@@ -106,6 +106,7 @@ public final class PostDetailActivity extends Activity {
                 if(progress.failed()>0 || progress.unexposed()>0 || !item.previewError().isEmpty()) section("Unavailable content",item.previewError());
             }
         } else {
+            listingDetails();
             section("Folder",item.categoryId()==null ? "Other" : item.categoryId());
             section("Tags",item.tags().isEmpty() ? "No tags" : String.join(", ",item.tags()));
             section("Tracking status",status(item.status()));
@@ -125,6 +126,15 @@ public final class PostDetailActivity extends Activity {
         addPhotos.setOnClickListener(v->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT)
                 .addCategory(Intent.CATEGORY_OPENABLE).setType("image/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true),42));
         if(!item.url().isEmpty()) {
+            Button refresh=button("Read listing details from link",false); body.addView(refresh,block());
+            refresh.setOnClickListener(v->{
+                refresh.setEnabled(false); refresh.setText("Reading public details…");
+                database.execute(()->{
+                    try { PreviewMetadata preview=new MetadataService().fetch(item.url()); repository.applyPreview(id,preview);
+                        runOnUiThread(()->{ if(!isDestroyed()) { reload(); Toast.makeText(this,"Available details updated. Your corrections are preserved.",Toast.LENGTH_LONG).show(); } });
+                    } catch(Exception error) { runOnUiThread(()->{ if(!isDestroyed()) { refresh.setEnabled(true); refresh.setText("Read listing details from link"); Toast.makeText(this,"Could not read public details. Edit them manually or share the post text.",Toast.LENGTH_LONG).show(); } }); }
+                });
+            });
             Button open=button(getString(R.string.open_link),false); body.addView(open,block());
             open.setOnClickListener(v->{ try { startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(item.url()))); }
                 catch(ActivityNotFoundException e) { Toast.makeText(this,"No browser installed",Toast.LENGTH_SHORT).show(); } });
@@ -135,6 +145,16 @@ public final class PostDetailActivity extends Activity {
                 repository.retryPhotos(id); SnapshotWorker.enqueue(this,id); runOnUiThread(this::reload);
             }); });
         }
+    }
+    private void listingDetails() {
+        LinearLayout panel=column(); panel.setPadding(dp(16),dp(12),dp(16),dp(16)); panel.setBackground(UiStyles.surface(this,UiStyles.SURFACE,18,UiStyles.LINE));
+        panel.addView(text("Listing details",18,ink));
+        String price=item.price().isEmpty()?"Not found":(item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod());
+        panel.addView(text("Price  ·  "+price,16,ink));
+        panel.addView(text("Location  ·  "+(item.location().isEmpty()?"Not found":item.location()),15,ink));
+        panel.addView(text("Product type  ·  "+(item.productType().isEmpty()?"Not found":item.productType()),15,ink));
+        panel.addView(text(item.metadataSource().isEmpty()?"Details were not provided. You can add them with Edit post.":item.metadataSource()+" Use Edit post to correct them.",12,muted));
+        body.addView(panel,block());
     }
     private void showStatusPicker() {
         int[] selected={item.status().ordinal()};
@@ -159,6 +179,12 @@ public final class PostDetailActivity extends Activity {
         editFolder.setSingleLine(true); editFolder.setThreshold(0);
         editFolder.setText(draft==null?(item.categoryId()==null?"Other":item.categoryId()):draft.getString("edit_folder")); form.addView(editFolder);
         editTags=editField(form,R.string.edit_tags,draft==null?String.join(", ",item.tags()):draft.getString("edit_tags"),false);
+        editPrice=editField(form,"Price (digits and decimal point)",draft==null?item.price():draft.getString("edit_price",""),false);
+        editPrice.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        editCurrency=editField(form,"Currency (USD, EUR, MXN or $ if unknown)",draft==null?item.currency():draft.getString("edit_currency",""),false);
+        editPeriod=editField(form,"Price per (month, day, item…)",draft==null?item.pricePeriod():draft.getString("edit_period",""),false);
+        editLocation=editField(form,"Location",draft==null?item.location():draft.getString("edit_location",""),false);
+        editProductType=editField(form,"Product type",draft==null?item.productType():draft.getString("edit_product_type",""),false);
         database.execute(()->{ List<String> folders=repository.folders(); runOnUiThread(()->{ if(!isDestroyed() && editDialog!=null && editDialog.isShowing()) {
             editFolder.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_dropdown_item_1line,folders));
             editFolder.setOnClickListener(v->editFolder.showDropDown());
@@ -167,17 +193,20 @@ public final class PostDetailActivity extends Activity {
         editDialog=new AlertDialog.Builder(this).setTitle(R.string.edit_post).setView(scroll).setNegativeButton(android.R.string.cancel,null).setPositiveButton(R.string.save_changes,null).create();
         editDialog.setOnShowListener(d->editDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             String title=editTitle.getText().toString(),notes=editNotes.getText().toString(),folder=editFolder.getText().toString(),tags=editTags.getText().toString();
+            ListingFacts details=new ListingFacts(editPrice.getText().toString().trim(),editCurrency.getText().toString().trim(),editPeriod.getText().toString().trim(),editLocation.getText().toString().trim(),editProductType.getText().toString().trim());
+            boolean detailsChanged=!details.price().equals(item.price()) || !details.currency().equals(item.currency()) || !details.period().equals(item.pricePeriod()) || !details.location().equals(item.location()) || !details.productType().equals(item.productType());
             AlertDialog dialog=editDialog; dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
             database.execute(()->{
-                try { repository.edit(id,title,notes,folder,tags); runOnUiThread(()->{ if(!isDestroyed()) { dialog.dismiss(); reload(); Toast.makeText(this,"Changes saved",Toast.LENGTH_SHORT).show(); } }); }
+                try { repository.edit(id,title,notes,folder,tags,detailsChanged?details:null); runOnUiThread(()->{ if(!isDestroyed()) { dialog.dismiss(); reload(); Toast.makeText(this,"Changes saved",Toast.LENGTH_SHORT).show(); } }); }
                 catch(Exception error) { String message=error instanceof IllegalArgumentException || error instanceof IllegalStateException?error.getMessage():"Could not save changes. Please try again.";
                     runOnUiThread(()->{ if(!isDestroyed()) { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true); Toast.makeText(this,message,Toast.LENGTH_LONG).show(); } }); }
             });
         })); editDialog.show(); UiStyles.styleEditor(editDialog);
     }
-    private EditText editField(LinearLayout form,int label,String value,boolean multiline) {
-        form.addView(text(getString(label),14,ink)); EditText input=new EditText(this); input.setSingleLine(!multiline); if(multiline) input.setMinLines(3);
-        input.setText(value); input.setContentDescription(getString(label));
+    private EditText editField(LinearLayout form,int label,String value,boolean multiline) { return editField(form,getString(label),value,multiline); }
+    private EditText editField(LinearLayout form,String label,String value,boolean multiline) {
+        form.addView(text(label,14,ink)); EditText input=new EditText(this); input.setSingleLine(!multiline); if(multiline) input.setMinLines(3);
+        input.setText(value); input.setContentDescription(label);
         input.setTextColor(ink); input.setTextSize(16); input.setPadding(dp(14),dp(12),dp(14),dp(12)); input.setBackground(UiStyles.surface(this,UiStyles.SURFACE,14,UiStyles.LINE));
         form.addView(input); return input;
     }
@@ -305,6 +334,8 @@ public final class PostDetailActivity extends Activity {
     private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
     @Override protected void onSaveInstanceState(Bundle state) { if(editDialog!=null && editDialog.isShowing()) {
         state.putBoolean("editing",true); state.putString("edit_title",editTitle.getText().toString()); state.putString("edit_notes",editNotes.getText().toString());
+        state.putString("edit_price",editPrice.getText().toString()); state.putString("edit_currency",editCurrency.getText().toString()); state.putString("edit_period",editPeriod.getText().toString());
+        state.putString("edit_location",editLocation.getText().toString()); state.putString("edit_product_type",editProductType.getText().toString());
         state.putString("edit_folder",editFolder.getText().toString()); state.putString("edit_tags",editTags.getText().toString());
     } state.putInt("photo",photoIndex); state.putString("tab",tab); super.onSaveInstanceState(state); }
     @Override protected void onDestroy() { if(statusDialog!=null) statusDialog.dismiss(); if(editDialog!=null) editDialog.dismiss(); if(photoDialog!=null) { photoDialog.setOnDismissListener(null); photoDialog.dismiss(); } if(updates!=null && observer!=null) updates.removeObserver(observer); images.shutdownNow(); if(repository!=null) { database.execute(repository::close); database.shutdown(); } super.onDestroy(); }

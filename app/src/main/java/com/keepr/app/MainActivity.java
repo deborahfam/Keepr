@@ -357,7 +357,7 @@ public final class MainActivity extends Activity {
         } else thumbnail=photo(item.media().get(0),height);
         cover.addView(thumbnail,new android.widget.FrameLayout.LayoutParams(-1,-1));
         if(!listView && !item.media().isEmpty()) {
-            TextView photos=badge(item.media().size()+" photos",ink,0xdd09090B);
+            TextView photos=badge(item.media().size()+(item.media().size()==1?" photo":" photos"),ink,0xdd09090B);
             android.widget.FrameLayout.LayoutParams pp=new android.widget.FrameLayout.LayoutParams(-2,-2,android.view.Gravity.BOTTOM|android.view.Gravity.CENTER_HORIZONTAL);
             pp.bottomMargin=dp(8); cover.addView(photos,pp);
         }
@@ -369,7 +369,8 @@ public final class MainActivity extends Activity {
         source.setMaxLines(1); source.setEllipsize(android.text.TextUtils.TruncateAt.END);
         top.addView(source,new LinearLayout.LayoutParams(0,-2,1)); top.addView(itemMenu(item),new LinearLayout.LayoutParams(dp(48),dp(48))); info.addView(top);
         TextView title=itemTitle(item,listView?15:18); title.setPadding(0,0,0,dp(4)); info.addView(title);
-        if(!item.price().isEmpty()) { TextView price=label((item.currency()+" "+item.price()).trim(),listView?14:16,ink); price.setTypeface(null,Typeface.BOLD); info.addView(price); }
+        if(!item.price().isEmpty()) { TextView price=label((item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod()),listView?14:16,ink); price.setTypeface(null,Typeface.BOLD); info.addView(price); }
+        if(!item.location().isEmpty()) { TextView location=label(item.location(),12,muted); location.setMaxLines(1); location.setEllipsize(android.text.TextUtils.TruncateAt.END); info.addView(location); }
         int statusColor=item.status()==SavedItem.Status.ACTIVE?0xff71D5AD:item.status()==SavedItem.Status.REACHED_OUT?0xffF4C567:muted;
         TextView status=label("●  "+StatusLabels.label(this,item.status()),11,statusColor); info.addView(status);
         TextView capture=label(item.captureSummary(),11,muted); capture.setMaxLines(2); capture.setEllipsize(android.text.TextUtils.TruncateAt.END); info.addView(capture);
@@ -497,7 +498,8 @@ public final class MainActivity extends Activity {
                                 snapshot==null ? "" : snapshot.price(),snapshot==null ? "" : snapshot.currency(),snapshot==null ? "" : snapshot.contact(),
                                 myNotes,folder,SavedItem.Status.ACTIVE,normalized.isEmpty() ? SavedItem.PreviewState.READY : SavedItem.PreviewState.PENDING,
                                 failed>0 ? "Some shared photos could not be copied. Share the missing photo again to save it." : "",now,now,
-                                sharedText,java.util.Collections.unmodifiableList(tagNames),java.util.Collections.unmodifiableList(copied));
+                                sharedText,java.util.Collections.unmodifiableList(tagNames),java.util.Collections.unmodifiableList(copied),0,0,0,
+                                snapshot==null?"":snapshot.location(),snapshot==null?"":snapshot.productType(),snapshot==null?"":snapshot.pricePeriod(),snapshot==null?"":snapshot.metadataSource());
                         store.add(link);
                         if (!normalized.isEmpty()) {
                             try { SnapshotWorker.enqueue(this,id); } catch (Exception ignored) { /* Pending items are scheduled on next launch. */ }

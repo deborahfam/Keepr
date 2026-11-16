@@ -5,7 +5,10 @@ public record SavedItem(String id, String url, String title, String description,
         String siteName, String imageUrl, String price, String currency, String contact,
         String notes, String categoryId, Status status, PreviewState previewState,
         String previewError, long createdAt, long updatedAt, String sharedText,
-        java.util.List<String> tags, java.util.List<CachedMedia> media, int expectedPhotos, int pendingPhotos, int failedPhotos) {
+        java.util.List<String> tags, java.util.List<CachedMedia> media, int expectedPhotos, int pendingPhotos, int failedPhotos, String location, String productType, String pricePeriod, String metadataSource) {
+    public SavedItem(String id,String url,String title,String description,String siteName,String imageUrl,String price,String currency,String contact,String notes,String categoryId,Status status,PreviewState previewState,String previewError,long createdAt,long updatedAt,String sharedText,java.util.List<String> tags,java.util.List<CachedMedia> media,int expectedPhotos,int pendingPhotos,int failedPhotos) {
+        this(id,url,title,description,siteName,imageUrl,price,currency,contact,notes,categoryId,status,previewState,previewError,createdAt,updatedAt,sharedText,tags,media,expectedPhotos,pendingPhotos,failedPhotos,"","","","");
+    }
     public SavedItem(String id,String url,String title,String description,String siteName,String imageUrl,String price,String currency,String contact,String notes,String categoryId,Status status,PreviewState previewState,String previewError,long createdAt,long updatedAt,String sharedText,java.util.List<String> tags,java.util.List<CachedMedia> media) {
         this(id,url,title,description,siteName,imageUrl,price,currency,contact,notes,categoryId,status,previewState,previewError,createdAt,updatedAt,sharedText,tags,media,0,0,0);
     }

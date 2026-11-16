@@ -23,7 +23,7 @@ public final class VaultBackup {
         SQLiteDatabase db=repository.backupDatabase();
         db.beginTransaction(); // Keep rows and referenced files stable against concurrent capture/deletion.
         try(ZipOutputStream zip=new ZipOutputStream(new BufferedOutputStream(output))) {
-            JSONObject manifest=new JSONObject(); manifest.put("format","keepr"); manifest.put("version",2);
+            JSONObject manifest=new JSONObject(); manifest.put("format","keepr"); manifest.put("version",3);
             for(String table:TABLES) {
                 JSONArray rows=new JSONArray();
                 try(Cursor c=db.query(table,null,null,null,null,null,null)) {
@@ -65,7 +65,7 @@ public final class VaultBackup {
             if(entry==null || !entry.getName().equals("manifest.json")) throw new IOException("This is not a Keepr backup.");
             ByteArrayOutputStream manifestBytes=new ByteArrayOutputStream(); copy(zip,manifestBytes,MANIFEST_LIMIT);
             JSONObject manifest=new JSONObject(manifestBytes.toString(StandardCharsets.UTF_8.name()));
-            if(!manifest.getString("format").equals("keepr") || (manifest.getInt("version")<1 || manifest.getInt("version")>2)) throw new IOException("Unsupported backup version.");
+            if(!manifest.getString("format").equals("keepr") || (manifest.getInt("version")<1 || manifest.getInt("version")>3)) throw new IOException("Unsupported backup version.");
             if(manifest.getInt("version")==1) manifest.put("Trash",new JSONArray());
             // SQLite validates columns, required values, uniqueness, enums and foreign keys in isolation.
             for(String table:TABLES) {
@@ -74,6 +74,10 @@ public final class VaultBackup {
                 JSONArray rows=manifest.getJSONArray(table);
                 for(int i=0;i<rows.length();i++) {
                     JSONObject row=rows.getJSONObject(i);
+                    if(table.equals("SavedItem") && manifest.getInt("version")<3) {
+                        for(String key:new String[]{"location","product_type","price_period","metadata_source"}) row.put(key,"");
+                        row.put("metadata_edited",0);
+                    }
                     if(row.length()!=columns.size()) throw new IOException("Incomplete backup metadata.");
                     ContentValues values=new ContentValues();
                     for(String key:columns) {
