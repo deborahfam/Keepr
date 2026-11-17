@@ -4,13 +4,14 @@ import android.app.*;
 import android.os.Bundle;
 import android.widget.*;
 import com.keepr.app.data.SQLiteSavedItemRepository;
+import com.keepr.app.data.FeedQuery;
 import com.keepr.app.domain.*;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.function.BiConsumer;
 
-/** Collection filters and explicit selection, scoped to the currently visible results. */
+/** Collection filters and explicit selection, scoped to all matching results across pages. */
 final class CollectionControls {
     private final Activity activity;
     private final SQLiteSavedItemRepository repository;
@@ -19,11 +20,13 @@ final class CollectionControls {
     private final BiConsumer<String,String> folderChanged;
     private String tag="",source="",from="",through="";
     private CollectionQuery.Sort sort=CollectionQuery.Sort.NEWEST;
-    private boolean selecting,busy;
+    private boolean selecting,busy,queryBusy=true;
+    private FeedQuery activeQuery;
+    private int selectionGeneration;
     private final Set<String> selected=new LinkedHashSet<>();
-    private List<SavedItem> all=List.of(),visible=List.of();
+    private List<String> availableTags=List.of(),availableSources=List.of();
     private LinearLayout selectionBar,toolsPanel;
-    private Button selectionButton,actions;
+    private Button selectionButton,actions,selectAll;
     private Spinner statusChoice;
     private TextView summary;
     private AlertDialog dialog;
@@ -46,7 +49,8 @@ final class CollectionControls {
         selectionButton=button("Done",this::toggleSelection); selectionButton.setId(R.id.collection_select);
         selectionBar=new LinearLayout(activity);
         selectionBar.addView(selectionButton);
-        selectionBar.addView(button("Select all results",()->{ for(SavedItem item:visible) selected.add(item.id()); render.run(); }),new LinearLayout.LayoutParams(0,-2,1));
+        selectAll=button("Select all results",this::selectAllResults);
+        selectionBar.addView(selectAll,new LinearLayout.LayoutParams(0,-2,1));
         actions=button("Actions",this::showActions); actions.setId(R.id.collection_actions); selectionBar.addView(actions,new LinearLayout.LayoutParams(0,-2,1)); parent.addView(selectionBar);
         update();
     }
@@ -54,31 +58,42 @@ final class CollectionControls {
         if(toolsPanel.getParent()!=null) ((android.view.ViewGroup)toolsPanel.getParent()).removeView(toolsPanel);
         dialog=new AlertDialog.Builder(activity).setTitle("Filters and sorting").setView(toolsPanel).setPositiveButton("Done",null).show();
     }
-    void toggleSelection() { if(busy) return; selecting=!selecting; selected.clear(); render.run(); }
+    void toggleSelection() { if(busy || queryBusy) return; selectionGeneration++; selecting=!selecting; selected.clear(); render.run(); }
     boolean hasFilters() { return !tag.isEmpty() || !source.isEmpty() || !from.isEmpty() || !through.isEmpty(); }
-    List<SavedItem> filter(List<SavedItem> items,String folder,String query,SavedItem.Status status,boolean loaded) {
-        all=new ArrayList<>(items); visible=CollectionQuery.apply(items,folder,query,status,tag,source,bound(from,false),bound(through,true),sort);
-        if(loaded) { Set<String> ids=new HashSet<>(); for(SavedItem item:visible) ids.add(item.id()); selected.retainAll(ids); }
-        update(); return visible;
+    FeedQuery query(String folder,String text,SavedItem.Status status) { return new FeedQuery(folder,text,status,tag,source,bound(from,false),bound(through,true),sort); }
+    boolean hasSelection() { return !selected.isEmpty(); }
+    void loading(FeedQuery query) { activeQuery=query; queryBusy=true; selectionGeneration++; update(); }
+    void loaded(List<String> matching,List<String> tags,List<String> sources) {
+        if(matching!=null) selected.retainAll(new HashSet<>(matching));
+        availableTags=tags; availableSources=sources; queryBusy=false; update();
+    }
+    private void selectAllResults() {
+        if(busy || queryBusy || activeQuery==null) return;
+        int generation=++selectionGeneration; FeedQuery filter=activeQuery; queryBusy=true; update();
+        worker.execute(()->{
+            try {
+                List<String> ids=repository.matchingIds(filter);
+                activity.runOnUiThread(()->{ if(activity.isDestroyed() || generation!=selectionGeneration) return; selected.addAll(ids); queryBusy=false; update(); render.run(); });
+            } catch(Exception error) { activity.runOnUiThread(()->{ if(activity.isDestroyed() || generation!=selectionGeneration) return; queryBusy=false; update(); toast("Could not select results. Please try again."); }); }
+        });
     }
     void addSelection(LinearLayout card,SavedItem item) {
         if(!selecting) return;
-        CheckBox checkbox=new CheckBox(activity); checkbox.setText("Select "+item.title()); checkbox.setChecked(selected.contains(item.id())); checkbox.setEnabled(!busy);
-        checkbox.setOnCheckedChangeListener((button,checked)->{ if(checked) selected.add(item.id()); else selected.remove(item.id()); update(); }); card.addView(checkbox);
+        CheckBox checkbox=new CheckBox(activity); checkbox.setText("Select "+item.title()); checkbox.setChecked(selected.contains(item.id())); checkbox.setEnabled(!busy && !queryBusy);
+        checkbox.setOnCheckedChangeListener((button,checked)->{ if(busy || queryBusy) { checkbox.setChecked(selected.contains(item.id())); return; } if(checked) selected.add(item.id()); else selected.remove(item.id()); update(); }); card.addView(checkbox);
     }
     private void update() {
         if(summary==null) return;
         String[] sorts={"Newest first","Oldest first","Price: low to high (by currency)","Price: high to low (by currency)"};
         summary.setText(sorts[sort.ordinal()]+(tag.isEmpty()?"":" · #"+tag)+(source.isEmpty()?"":" · "+source)+(from.isEmpty()?"":" · from "+from)+(through.isEmpty()?"":" · through "+through));
-        selectionButton.setText("Done"); selectionButton.setEnabled(!busy);
+        selectionButton.setText("Done"); selectionButton.setEnabled(!busy && !queryBusy); selectAll.setEnabled(!busy && !queryBusy);
         selectionBar.setVisibility(selecting?android.view.View.VISIBLE:android.view.View.GONE);
-        actions.setText(selected.size()+" selected · Actions"); actions.setEnabled(!busy && !selected.isEmpty());
+        actions.setText(selected.size()+" selected · Actions"); actions.setEnabled(!busy && !queryBusy && !selected.isEmpty());
     }
     private long bound(String date,boolean end) { if(date.isEmpty()) return end?Long.MAX_VALUE:Long.MIN_VALUE; LocalDate day=LocalDate.parse(date); return (end?day.plusDays(1):day).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli(); }
     private void showFilters() {
         LinearLayout form=form();
-        List<String> tags=new ArrayList<>(),sources=new ArrayList<>();
-        for(SavedItem item:all) { for(String value:item.tags()) addUnique(tags,value); addUnique(sources,CollectionQuery.source(item)); }
+        List<String> tags=new ArrayList<>(availableTags),sources=new ArrayList<>(availableSources);
         tags.sort(String.CASE_INSENSITIVE_ORDER); sources.sort(String.CASE_INSENSITIVE_ORDER);
         Spinner tagChoice=choices(form,"Tag",tags,tag,"Any tag"),sourceChoice=choices(form,"Source",sources,source,"Any source");
         EditText start=field(form,"Saved from (YYYY-MM-DD)",from),end=field(form,"Saved through (YYYY-MM-DD)",through);
@@ -97,7 +112,7 @@ final class CollectionControls {
     }
     private static void addUnique(List<String> list,String value) { if(list.stream().noneMatch(old->old.equalsIgnoreCase(value))) list.add(value); }
     private void showActions() {
-        if(busy || selected.isEmpty()) return;
+        if(busy || queryBusy || selected.isEmpty()) return;
         dialog=new AlertDialog.Builder(activity).setTitle(selected.size()+" selected posts")
             .setItems(new String[]{"Move to folder","Add tags","Archive","Move to trash",activity.getString(R.string.share_posts)},(d,index)->{
                 List<String> ids=new ArrayList<>(selected);

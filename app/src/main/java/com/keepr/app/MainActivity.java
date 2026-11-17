@@ -19,6 +19,7 @@ import java.util.Locale;
 import com.keepr.app.domain.SavedItem;
 import com.keepr.app.domain.SavedItemRepository;
 import com.keepr.app.data.SQLiteSavedItemRepository;
+import com.keepr.app.data.FeedQuery;
 import com.keepr.app.data.UrlExtractor;
 import com.keepr.app.data.MetadataService;
 import com.keepr.app.data.PreviewMetadata;
@@ -36,6 +37,19 @@ public final class MainActivity extends Activity {
     private final ExecutorService databaseWorker = Executors.newSingleThreadExecutor();
     private final ExecutorService previewWorker = Executors.newSingleThreadExecutor();
     private LinearLayout cards;
+    private static final int PAGE_SIZE=30;
+    private final android.os.Handler feedHandler=new android.os.Handler(android.os.Looper.getMainLooper());
+    private volatile int feedGeneration;
+    private int pageOffset,desiredOffset,totalResults,totalSaved,attentionCount;
+    private boolean pageLoading;
+    private String pageError="";
+    private FeedQuery displayedQuery;
+    private Button previousPage,nextPage;
+    private TextView pageLabel;
+    private ScrollView collectionScroll;
+    private Runnable pendingFeed;
+    private final Runnable refreshFeed=()->requestPage(pageLoading?desiredOffset:pageOffset,0);
+
     private TextView count, collectionSummary;
     private AlertDialog editor;
     private EditText editorUrl, editorTitle, editorNotes, editorText, editorTags;
@@ -68,6 +82,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         listView = getSharedPreferences("appearance", MODE_PRIVATE).getBoolean("list_view", false);
         if(state!=null) {
+            pageOffset=Math.max(0,state.getInt("page_offset",0));
             category=state.getString("filter_folder","All"); query=state.getString("filter_query","");
             String status=state.getString("filter_status"); if(status!=null) try { statusFilter=SavedItem.Status.valueOf(status); } catch(IllegalArgumentException ignored) { }
         }
@@ -78,15 +93,13 @@ public final class MainActivity extends Activity {
         buildScreen();
         databaseWorker.execute(() -> {
             try {
-                store.observe(snapshot -> runOnUiThread(() -> {
-                    if (!isDestroyed()) { links.clear(); links.addAll(snapshot); renderCards(); }
-                }));
-                ((SQLiteSavedItemRepository)store).purgeExpired();
-                List<SavedItem> loaded = store.load();
+                SQLiteSavedItemRepository repository=(SQLiteSavedItemRepository)store;
+                repository.observeChanges(()->runOnUiThread(this::reloadCollection));
+                repository.initialize(); repository.purgeExpired();
                 List<String> savedFolders = store.folders();
-                for (SavedItem item : loaded) if (!item.url().isEmpty() && (item.previewState() == SavedItem.PreviewState.PENDING || store.needsPhotoDiscovery(item.id()))) SnapshotWorker.enqueue(this,item.id());
+                for (String itemId:repository.pendingItemIds()) SnapshotWorker.enqueue(this,itemId);
                 runOnUiThread(() -> { if (!isDestroyed()) {
-                    storageHealthy = true; links.clear(); links.addAll(loaded);
+                    storageHealthy = true;
                     String selectedFolder=editorCategory==null || editorCategory.getSelectedItem()==null ? null : editorCategory.getSelectedItem().toString();
                     folders.clear(); folders.addAll(savedFolders);
                     if (selectedFolder!=null) {
@@ -94,7 +107,7 @@ public final class MainActivity extends Activity {
                         ((ArrayAdapter<?>)editorCategory.getAdapter()).notifyDataSetChanged();
                         editorCategory.setSelection(folders.indexOf(selectedFolder));
                     }
-                    rebuildFolderChips(); renderCards();
+                    rebuildFolderChips(); requestPage(pageOffset,0);
                 } });
             } catch (Exception e) {
                 runOnUiThread(() -> {
@@ -118,15 +131,7 @@ public final class MainActivity extends Activity {
             ((ArrayAdapter<?>)editorCategory.getAdapter()).notifyDataSetChanged();
             editorCategory.setSelection(folders.indexOf(folder));
         } else if (state == null) receiveShare(getIntent());
-        workObserver = infos -> {
-            if (isDestroyed() || !storageHealthy) return;
-            databaseWorker.execute(() -> {
-                try {
-                    List<SavedItem> refreshed = store.load();
-                    runOnUiThread(() -> { if (!isDestroyed()) { links.clear(); links.addAll(refreshed); renderCards(); } });
-                } catch (Exception ignored) { }
-            });
-        };
+        workObserver = infos -> { if (!isDestroyed() && storageHealthy) reloadCollection(); };
         workUpdates=androidx.work.WorkManager.getInstance(this).getWorkInfosByTagLiveData("keepr-snapshot");
         workUpdates.observeForever(workObserver);
     }
@@ -138,12 +143,47 @@ public final class MainActivity extends Activity {
         reloadCollection();
     }
     private void reloadCollection() {
-        databaseWorker.execute(()->{
+        if(isDestroyed() || !storageHealthy) return;
+        feedHandler.removeCallbacks(refreshFeed); feedHandler.postDelayed(refreshFeed,150);
+    }
+    private void requestPage(int offset,int delay) {
+        if(!storageHealthy || isDestroyed()) return;
+        FeedQuery filter=collectionControls.query(category,query,statusFilter);
+        int generation=++feedGeneration; desiredOffset=offset;
+        feedHandler.removeCallbacks(refreshFeed);
+        if(pendingFeed!=null) feedHandler.removeCallbacks(pendingFeed);
+        pageLoading=true; pageError=""; collectionControls.loading(filter);
+        previousPage.setEnabled(false); nextPage.setEnabled(false); count.setText("Loading results…");
+        // Keep the current bounded page visible while refreshing, preserving scroll position.
+        boolean retain=collectionControls.hasSelection();
+        pendingFeed=()->databaseWorker.execute(()->{
+            if(generation!=feedGeneration) return;
             try {
-                List<SavedItem> refreshed=store.load(); List<String> savedFolders=store.folders();
-                runOnUiThread(()->{ if(!isDestroyed()) { links.clear(); links.addAll(refreshed); folders.clear(); folders.addAll(savedFolders); rebuildFolderChips(); renderCards(); } });
-            } catch(Exception ignored) { }
+                SQLiteSavedItemRepository repository=(SQLiteSavedItemRepository)store;
+                SQLiteSavedItemRepository.Page page=repository.page(filter,offset,PAGE_SIZE);
+                int actualOffset=offset;
+                if(offset>0 && page.items().isEmpty()) {
+                    actualOffset=page.total()==0?0:((page.total()-1)/PAGE_SIZE)*PAGE_SIZE;
+                    page=repository.page(filter,actualOffset,PAGE_SIZE);
+                }
+                if(generation!=feedGeneration) return;
+                List<String> matching=retain?repository.matchingIds(filter):null;
+                List<String> savedFolders=repository.folders(),tags=repository.filterOptions(true),sources=repository.filterOptions(false);
+                SQLiteSavedItemRepository.CollectionStats stats=repository.collectionStats();
+                SQLiteSavedItemRepository.Page result=page; int resultOffset=actualOffset;
+                runOnUiThread(()->{
+                    if(isDestroyed() || generation!=feedGeneration) return;
+                    pageLoading=false; displayedQuery=filter; pageOffset=resultOffset; totalResults=result.total(); totalSaved=stats.total(); attentionCount=stats.attention();
+                    links.clear(); links.addAll(result.items());
+                    folders.clear(); folders.addAll(savedFolders); rebuildFolderChips();
+                    collectionControls.loaded(matching,tags,sources); drawCards();
+                });
+            } catch(Exception error) { runOnUiThread(()->{
+                if(isDestroyed() || generation!=feedGeneration) return;
+                pageLoading=false; pageError="Could not load these results. Try again."; links.clear(); drawCards();
+            }); }
         });
+        feedHandler.postDelayed(pendingFeed,delay);
     }
 
     private void buildScreen() {
@@ -185,7 +225,7 @@ public final class MainActivity extends Activity {
         });
         root.addView(brand);
 
-        ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setClipToPadding(false);
+        ScrollView scroll = new ScrollView(this); collectionScroll=scroll; scroll.setFillViewport(true); scroll.setClipToPadding(false);
         LinearLayout content = column(); content.setPadding(dp(20), 0, dp(20), dp(24));
         scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         Button add = button("＋  Save new post", true);
@@ -195,6 +235,7 @@ public final class MainActivity extends Activity {
         LinearLayout searchRow = new LinearLayout(this); searchRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         searchRow.setBackground(surface(UiStyles.SURFACE, 16, line));
         search = new EditText(this); search.setSingleLine(true);
+        search.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(1024)});
         search.setHint(R.string.search_finds); search.setTextSize(15); search.setTextColor(ink); search.setHintTextColor(muted);
         search.setPadding(dp(16), dp(12), dp(16), dp(12)); search.setBackground(surface(UiStyles.SURFACE, 16, line));
         search.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_search, 0, 0, 0);
@@ -212,12 +253,12 @@ public final class MainActivity extends Activity {
         search.setOnEditorActionListener((v, action, event) -> {
             if (action != android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) return false;
             ((android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(search.getWindowToken(), 0);
-            search.clearFocus(); return true;
+            search.clearFocus(); requestPage(0,0); return true;
         });
         search.setText(query);
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            public void onTextChanged(CharSequence s, int start, int before, int count) { query = s.toString(); clearSearch.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE); renderCards(); }
+            public void onTextChanged(CharSequence s, int start, int before, int count) { query = s.toString(); clearSearch.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE); requestPage(0,250); }
             public void afterTextChanged(Editable e) {}
         });
         LinearLayout categoryHeading = new LinearLayout(this); categoryHeading.setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -258,6 +299,13 @@ public final class MainActivity extends Activity {
         collectionHeading.addView(viewChoices); updateViewButtons();
         content.addView(collectionHeading);
         cards = column(); cards.setId(R.id.collection_items); content.addView(cards);
+        LinearLayout paging=new LinearLayout(this); paging.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        previousPage=button("Previous",false); previousPage.setId(R.id.previous_page);
+        nextPage=button("Next",false); nextPage.setId(R.id.next_page);
+        pageLabel=label("",12,muted); pageLabel.setGravity(android.view.Gravity.CENTER);
+        paging.addView(previousPage); paging.addView(pageLabel,new LinearLayout.LayoutParams(0,-2,1)); paging.addView(nextPage); content.addView(paging);
+        previousPage.setOnClickListener(v->{ requestPage(Math.max(0,pageOffset-PAGE_SIZE),0); collectionScroll.smoothScrollTo(0,0); });
+        nextPage.setOnClickListener(v->{ requestPage(pageOffset+PAGE_SIZE,0); collectionScroll.smoothScrollTo(0,0); });
 
         TextView offline=label("Downloaded photos work offline. Some captures may still be pending.",13,0xffA5D5BD);
         offline.setPadding(dp(14),dp(14),dp(14),dp(14)); offline.setBackground(surface(0xff10201A,16,0));
@@ -289,17 +337,24 @@ public final class MainActivity extends Activity {
     }
 
     private void renderCards() {
-        if (cards == null) return;
-        cards.removeAllViews(); int shown = 0;
-        for (SavedItem link : collectionControls.filter(links,category,query,statusFilter,storageHealthy)) {
-            shown++;
-            cards.addView(savedItemView(link));
+        if(cards==null) return;
+        FeedQuery requested=collectionControls.query(category,query,statusFilter);
+        if(storageHealthy && !requested.equals(displayedQuery)) { requestPage(0,0); return; }
+        if(!pageLoading) drawCards();
+    }
+    private void drawCards() {
+        if(cards==null) return;
+        cards.removeAllViews(); int shown=links.size();
+        if(!pageError.isEmpty()) {
+            count.setText("Results unavailable"); pageLabel.setText("");
+            cards.addView(label(pageError,15,muted)); Button retry=button("Try again",true); retry.setOnClickListener(v->requestPage(pageOffset,0)); cards.addView(retry); return;
         }
-        count.setText(shown + (shown == 1 ? " result" : " results") + ((!query.isEmpty() || statusFilter!=null || collectionControls.hasFilters()) ? " · filtered" : ""));
-        int attention=0;
-        for(SavedItem saved:links) if(saved.previewState()==SavedItem.PreviewState.FAILED || saved.failedPhotos()>0 || saved.expectedPhotos()>saved.media().size()) attention++;
-        collectionSummary.setText(links.size()+" saved"+(attention>0?" · "+attention+" need attention":" · Your personal collection"));
-        count.setContentDescription(getResources().getQuantityString(R.plurals.saved_count, shown, shown));
+        for(SavedItem link:links) cards.addView(savedItemView(link));
+        count.setText(totalResults + (totalResults == 1 ? " result" : " results") + ((!query.isEmpty() || statusFilter!=null || collectionControls.hasFilters() || !category.equals("All")) ? " · filtered" : ""));
+        collectionSummary.setText(totalSaved+" saved"+(attentionCount>0?" · "+attentionCount+" need attention":" · Your personal collection"));
+        count.setContentDescription(getResources().getQuantityString(R.plurals.saved_count,totalResults,totalResults));
+        previousPage.setEnabled(storageHealthy && pageOffset>0); nextPage.setEnabled(storageHealthy && pageOffset+shown<totalResults);
+        pageLabel.setText(totalResults==0?"":"Page "+(pageOffset/PAGE_SIZE+1)+" of "+((totalResults+PAGE_SIZE-1)/PAGE_SIZE));
         if (shown == 0) {
             LinearLayout empty = column(); empty.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
             empty.setPadding(dp(24), dp(28), dp(24), dp(30));
@@ -307,11 +362,11 @@ public final class MainActivity extends Activity {
             ImageView illustration = new ImageView(this); illustration.setImageResource(R.drawable.empty_collection);
             illustration.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             empty.addView(illustration, new LinearLayout.LayoutParams(dp(160), dp(110)));
-            TextView title = label(!storageHealthy ? "Opening your collection…" : links.isEmpty() ? "Keep something good." : "No matching finds", 20, ink);
+            TextView title = label(!storageHealthy ? "Opening your collection…" : totalSaved==0 ? "Keep something good." : "No matching finds", 20, ink);
             title.setGravity(android.view.Gravity.CENTER); title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL)); title.setTextSize(24); empty.addView(title);
-            TextView explanation = label(!storageHealthy ? "Your saved posts will appear here." : links.isEmpty() ? "Tap Save new post to keep a link. You can also share text and photos to Keepr from another app." : "Try another search or clear your filters to see your collection.", 14, muted);
+            TextView explanation = label(!storageHealthy ? "Your saved posts will appear here." : totalSaved==0 ? "Tap Save new post to keep a link. You can also share text and photos to Keepr from another app." : "Try another search or clear your filters to see your collection.", 14, muted);
             explanation.setGravity(android.view.Gravity.CENTER); explanation.setLineSpacing(dp(3), 1); empty.addView(explanation);
-            if (storageHealthy && !links.isEmpty()) {
+            if (storageHealthy && totalSaved>0) {
                 Button reset = button("Clear search and filters", false);
                 reset.setOnClickListener(v -> { category = "All"; statusFilter = null; query = "";
                     collectionControls.reset(); search.setText(""); statuses.setSelection(0); updateFilters(); renderCards(); });
@@ -562,7 +617,9 @@ public final class MainActivity extends Activity {
         ImageView view = new ImageView(this); view.setScaleType(ImageView.ScaleType.CENTER_CROP);
         view.setBackground(surface(canvas,14,line)); view.setClipToOutline(true); view.setTag(media.id());
         view.setContentDescription(getString(R.string.saved_photo));
+        int generation=feedGeneration;
         imageWorker.execute(() -> {
+            if(generation!=feedGeneration || isDestroyed()) return;
             android.graphics.BitmapFactory.Options options = new android.graphics.BitmapFactory.Options(); options.inJustDecodeBounds=true;
             String path = new java.io.File(getFilesDir(),media.relativePath()).getPath();
             android.graphics.BitmapFactory.decodeFile(path,options);
@@ -570,7 +627,7 @@ public final class MainActivity extends Activity {
             while (Math.max(options.outWidth,options.outHeight)/options.inSampleSize > 900) options.inSampleSize*=2;
             options.inJustDecodeBounds=false;
             android.graphics.Bitmap bitmap=android.graphics.BitmapFactory.decodeFile(path,options);
-            runOnUiThread(() -> { if (!isDestroyed() && bitmap!=null && media.id().equals(view.getTag())) view.setImageBitmap(bitmap); });
+            runOnUiThread(() -> { if (!isDestroyed() && generation==feedGeneration && view.isAttachedToWindow() && bitmap!=null && media.id().equals(view.getTag())) view.setImageBitmap(bitmap); });
         });
         return view;
     }
@@ -591,6 +648,7 @@ public final class MainActivity extends Activity {
             ArrayList<String> uris=new ArrayList<>(); for (Uri uri : editorAttachments) uris.add(uri.toString());
             out.putStringArrayList("draft_attachments",uris);
         }
+        out.putInt("page_offset",pageLoading?desiredOffset:pageOffset);
         out.putString("filter_folder",category); out.putString("filter_query",query); out.putString("filter_status",statusFilter==null?null:statusFilter.name());
         collectionControls.save(out);
         super.onSaveInstanceState(out);
@@ -601,6 +659,7 @@ public final class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        feedGeneration++; feedHandler.removeCallbacksAndMessages(null);
         if (workUpdates!=null && workObserver!=null) workUpdates.removeObserver(workObserver);
         if(collectionControls!=null) collectionControls.close();
         if(duplicateDialog!=null) duplicateDialog.dismiss();

@@ -49,6 +49,12 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     }
     public void initialize() throws JSONException { SQLiteDatabase db=helper.getWritableDatabase(); migrateLegacy(db); backfillListingFacts(db); backfillContacts(db); backfillLocations(db); }
     public record Page(List<SavedItem> items,int total) {}
+    public record CollectionStats(int total,int attention) {}
+    public CollectionStats collectionStats() {
+        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT COUNT(*),COALESCE(SUM(CASE WHEN preview_state='FAILED' OR EXISTS(SELECT 1 FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='FAILED') OR expected_photos>(SELECT COUNT(*) FROM CachedMedia WHERE saved_item_id=SavedItem.id) THEN 1 ELSE 0 END),0) FROM SavedItem WHERE id NOT IN (SELECT saved_item_id FROM Trash)",null)) {
+            c.moveToFirst(); return new CollectionStats(c.getInt(0),c.getInt(1));
+        }
+    }
     public Page page(FeedQuery filter,int offset,int size) {
         if(offset<0 || size<1 || size>100) throw new IllegalArgumentException("Invalid page bounds");
         var sql=filter.sql(); SQLiteDatabase db=helper.getReadableDatabase(); db.beginTransaction();

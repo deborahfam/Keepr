@@ -11,15 +11,25 @@ public record FeedQuery(String folder,String text,SavedItem.Status status,String
     static final String NO_PORT="CASE WHEN substr("+HOST+",1,1)='[' THEN substr("+HOST+",1,instr("+HOST+",']')) ELSE substr("+HOST+",1,instr("+HOST+"||':',':')-1) END";
     static final String SOURCE="CASE WHEN url='' THEN CASE WHEN site_name='' THEN 'Shared content' ELSE site_name END ELSE CASE WHEN lower(substr("+NO_PORT+",1,4))='www.' THEN lower(substr("+NO_PORT+",5)) ELSE lower("+NO_PORT+") END END";
     record Sql(String where,String[] args,String order) {}
+    static String casePattern(String value) {
+        StringBuilder pattern=new StringBuilder();
+        value.codePoints().forEach(point->{
+            int lower=Character.toLowerCase(point),upper=Character.toUpperCase(point),title=Character.toTitleCase(point);
+            if(lower!=upper) { pattern.append('[').appendCodePoint(lower).appendCodePoint(upper); if(title!=upper && title!=lower) pattern.appendCodePoint(title); pattern.append(']'); }
+            else if(point=='*' || point=='?' || point=='[' || point==']') pattern.append('[').appendCodePoint(point).append(']');
+            else pattern.appendCodePoint(point);
+        });
+        return pattern.toString();
+    }
     Sql sql() {
         StringBuilder where=new StringBuilder("id NOT IN (SELECT saved_item_id FROM Trash)"); List<String> args=new ArrayList<>();
         if(!folder.equals("All")) { where.append(" AND COALESCE((SELECT name FROM Category WHERE id=SavedItem.category_id),'Other')=?"); args.add(folder); }
         if(status!=null) { where.append(" AND status=?"); args.add(status.name()); }
-        if(!tag.isEmpty()) { where.append(" AND EXISTS(SELECT 1 FROM SavedItemTag it JOIN Tag t ON t.id=it.tag_id WHERE it.saved_item_id=SavedItem.id AND t.name=? COLLATE NOCASE)"); args.add(tag); }
-        if(!source.isEmpty()) { where.append(" AND ("+SOURCE+")=? COLLATE NOCASE"); args.add(source); }
+        if(!tag.isEmpty()) { where.append(" AND EXISTS(SELECT 1 FROM SavedItemTag it JOIN Tag t ON t.id=it.tag_id WHERE it.saved_item_id=SavedItem.id AND t.name GLOB ?)"); args.add(casePattern(tag)); }
+        if(!source.isEmpty()) { where.append(" AND ("+SOURCE+") GLOB ?"); args.add(casePattern(source)); }
         where.append(" AND created_at>=? AND created_at<?"); args.add(Long.toString(from)); args.add(Long.toString(until));
         if(!text.trim().isEmpty()) {
-            where.append(" AND instr(lower(title||' '||url||' '||notes||' '||description||' '||shared_text||' '||location||' '||product_type||' '||price||' '||contact_name||' '||contact_phone||' '||contact_email||' '||contact_whatsapp||' '||COALESCE((SELECT group_concat(t.name,' ') FROM SavedItemTag it JOIN Tag t ON t.id=it.tag_id WHERE it.saved_item_id=SavedItem.id),'')),lower(?))>0"); args.add(text.trim());
+            where.append(" AND (title||' '||url||' '||notes||' '||description||' '||shared_text||' '||location||' '||product_type||' '||price||' '||contact_name||' '||contact_phone||' '||contact_email||' '||contact_whatsapp||' '||COALESCE((SELECT group_concat(t.name,' ') FROM SavedItemTag it JOIN Tag t ON t.id=it.tag_id WHERE it.saved_item_id=SavedItem.id),'')) GLOB ?"); args.add("*"+casePattern(text.trim())+"*");
         }
         String order="created_at "+(sort==CollectionQuery.Sort.OLDEST?"ASC":"DESC")+",id";
         if(sort==CollectionQuery.Sort.PRICE_LOW || sort==CollectionQuery.Sort.PRICE_HIGH) {

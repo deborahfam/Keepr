@@ -79,6 +79,7 @@ public class CollectionOrganizationTest {
                     ((android.widget.Spinner)field(activity,"statuses")).setSelection(SavedItem.Status.ARCHIVED.ordinal()+1);
                 });
                 InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                awaitLoaded(scenario);
                 scenario.onActivity(activity->assertTrue(((Set<?>)field(field(activity,"collectionControls"),"selected")).isEmpty()));
             } finally { repo.delete(id); }
         }
@@ -94,6 +95,9 @@ public class CollectionOrganizationTest {
                 awaitLoaded(scenario);
                 scenario.onActivity(activity->{
                     ((android.widget.EditText)field(activity,"search")).setText(id);
+                });
+                awaitLoaded(scenario);
+                scenario.onActivity(activity->{
                     activity.findViewById(R.id.collection_select).performClick();
                     ((Set<String>)field(field(activity,"collectionControls"),"selected")).add(id);
                     activity.findViewById(R.id.view_list).performClick();
@@ -122,7 +126,7 @@ public class CollectionOrganizationTest {
 
     private void awaitLoaded(ActivityScenario<MainActivity> scenario) {
         java.util.concurrent.atomic.AtomicBoolean ready=new java.util.concurrent.atomic.AtomicBoolean(); long until=android.os.SystemClock.elapsedRealtime()+5000;
-        while(!ready.get() && android.os.SystemClock.elapsedRealtime()<until) { scenario.onActivity(activity->ready.set((boolean)field(activity,"storageHealthy"))); if(!ready.get()) android.os.SystemClock.sleep(30); } assertTrue(ready.get());
+        while(!ready.get() && android.os.SystemClock.elapsedRealtime()<until) { scenario.onActivity(activity->ready.set((boolean)field(activity,"storageHealthy") && !(boolean)field(activity,"pageLoading"))); if(!ready.get()) android.os.SystemClock.sleep(30); } assertTrue(ready.get());
     }
     private Object field(Object object,String name) { try { java.lang.reflect.Field field=object.getClass().getDeclaredField(name); field.setAccessible(true); return field.get(object); } catch(Exception error) { throw new AssertionError(error); } }
 }

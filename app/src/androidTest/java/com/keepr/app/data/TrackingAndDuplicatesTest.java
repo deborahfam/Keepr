@@ -37,19 +37,21 @@ public class TrackingAndDuplicatesTest {
         try(SQLiteSavedItemRepository repository=new SQLiteSavedItemRepository(context)) {
             repository.add(item(a,"",token,"Other")); repository.add(item(b,"",token,"Electronics")); repository.setStatus(a,SavedItem.Status.PURCHASED);
             try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
-                await(scenario,activity->(boolean)field(activity,"storageHealthy"));
+                await(scenario,activity->(boolean)field(activity,"storageHealthy") && !(boolean)field(activity,"pageLoading"));
                 scenario.onActivity(activity->{
                     set(activity,"query",token); set(activity,"category","Other");
-                    ((Spinner)activity.findViewById(R.id.status_filter)).setSelection(SavedItem.Status.PURCHASED.ordinal()+1);
+                    invoke(field(activity,"collectionControls"),"showTools",new Class<?>[]{});
+                    ((Spinner)field(activity,"statuses")).setSelection(SavedItem.Status.PURCHASED.ordinal()+1);
                 });
-                await(scenario,activity->"1".contentEquals(((TextView)field(activity,"count")).getText()));
-                scenario.recreate(); await(scenario,activity->(boolean)field(activity,"storageHealthy"));
+                await(scenario,activity->((TextView)field(activity,"count")).getText().toString().startsWith("1 result"));
+                scenario.recreate(); await(scenario,activity->(boolean)field(activity,"storageHealthy") && !(boolean)field(activity,"pageLoading"));
                 scenario.onActivity(activity->{
                     assertEquals("Other",field(activity,"category")); assertEquals(token,field(activity,"query")); assertEquals(SavedItem.Status.PURCHASED,field(activity,"statusFilter"));
-                    assertEquals("1",((TextView)field(activity,"count")).getText().toString());
-                    ((Spinner)activity.findViewById(R.id.status_filter)).setSelection(SavedItem.Status.ARCHIVED.ordinal()+1);
+                    assertTrue(((TextView)field(activity,"count")).getText().toString().startsWith("1 result"));
+                    invoke(field(activity,"collectionControls"),"showTools",new Class<?>[]{});
+                    ((Spinner)field(activity,"statuses")).setSelection(SavedItem.Status.ARCHIVED.ordinal()+1);
                 });
-                await(scenario,activity->"0".contentEquals(((TextView)field(activity,"count")).getText()));
+                await(scenario,activity->((TextView)field(activity,"count")).getText().toString().startsWith("0 results"));
             } finally { repository.delete(a); repository.delete(b); }
         }
     }
@@ -63,7 +65,7 @@ public class TrackingAndDuplicatesTest {
         try(SQLiteSavedItemRepository repository=new SQLiteSavedItemRepository(context)) {
             repository.add(item(id,url,"Saved title","Other")); repository.finishPhotoDiscovery(id); repository.setStatus(id,SavedItem.Status.PURCHASED);
             try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
-                await(scenario,activity->(boolean)field(activity,"storageHealthy"));
+                await(scenario,activity->(boolean)field(activity,"storageHealthy") && !(boolean)field(activity,"pageLoading"));
                 scenario.onActivity(activity->{ invoke(activity,"showEditor",new Class<?>[]{String.class},url); ((EditText)field(activity,"editorTitle")).setText("New draft title"); });
                 instrumentation.waitForIdleSync();
                 scenario.onActivity(activity->((AlertDialog)field(activity,"editor")).getButton(AlertDialog.BUTTON_POSITIVE).performClick());
