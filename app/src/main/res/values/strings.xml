@@ -53,4 +53,35 @@ Open the most recently saved copy, retry its public capture, or save a separate 
     <string name="save_another_copy">Save another copy</string>
     <string name="capture_queued">Capture update queued</string>
     <string name="status_saved">Status updated</string>
+    <string name="share_posts">Share posts</string>
+    <string name="share_back">Back</string>
+    <string name="share_loading">Opening selected posts…</string>
+    <string name="share_explanation">Send a text summary to anyone, or a Keepr file with saved photos to another Keepr user. Each person keeps an independent copy.</string>
+    <string name="share_include_notes">Include my notes</string>
+    <string name="share_include_contacts">Include contact fields</string>
+    <string name="share_include_caption">Include publication captions</string>
+    <string name="share_privacy">Review before sharing. Titles, links, captions and photos may contain contact information. These options do not redact text or images. Files are not encrypted. Folders, tags and tracking status stay private.</string>
+    <string name="share_counts">Selected posts: %1$d · Saved photos in Keepr file: %2$d</string>
+    <string name="share_preview">Text preview</string>
+    <string name="share_summary">Share text summary</string>
+    <string name="share_prepare_file">Prepare Keepr file with photos</string>
+    <string name="share_preparing">Preparing file…</string>
+    <string name="share_send_file">Send Keepr file</string>
+    <string name="share_no_app">No compatible sharing app is available.</string>
+    <string name="share_no_picker">No document picker is available.</string>
+    <string name="share_import_title">Import shared posts</string>
+    <string name="share_cancel">Cancel</string>
+    <string name="share_open_collection">Open collection</string>
+    <string name="share_working">Processing shared posts… Keep Keepr open until this finishes.</string>
+    <string name="share_import_help">Choose a .keepr file someone sent you. You can review its content before saving. Vault backups belong in Backup and restore.</string>
+    <string name="share_choose_file">Choose Keepr file</string>
+    <string name="share_choose_another">Choose another file</string>
+    <string name="share_import_explanation">Review these shared copies. They will be saved in Other with Active status. No original links are fetched automatically, and later changes are not synchronized.</string>
+    <string name="share_keep_existing">Skip links already in my collection</string>
+    <string name="share_duplicates_help">Uncheck to save another copy. Existing posts are never overwritten. Text-only and photo-only posts are always new copies.</string>
+    <string name="share_import_copies">Save shared copies</string>
+    <string name="share_import_result">Saved: %1$d · Existing links skipped: %2$d</string>
+    <string name="share_invalid_file">Could not read this sharing file. It may be damaged, unsupported, too large, or no longer accessible. Choose a complete Keepr sharing file (up to 100 posts and 256 MiB).</string>
+    <string name="share_import_failed">Could not save the shared posts. No shared copies were added. Check available storage and try again.</string>
+    <plurals name="share_photos"><item quantity="one">%d saved photo</item><item quantity="other">%d saved photos</item></plurals>
 </resources>

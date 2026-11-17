@@ -99,8 +99,9 @@ final class CollectionControls {
     private void showActions() {
         if(busy || selected.isEmpty()) return;
         dialog=new AlertDialog.Builder(activity).setTitle(selected.size()+" selected posts")
-            .setItems(new String[]{"Move to folder","Add tags","Archive","Move to trash"},(d,index)->{
+            .setItems(new String[]{"Move to folder","Add tags","Archive","Move to trash",activity.getString(R.string.share_posts)},(d,index)->{
                 List<String> ids=new ArrayList<>(selected);
+                if(index==4) { SharePostsActivity.open(activity,ids); return; }
                 SQLiteSavedItemRepository.BulkAction action=SQLiteSavedItemRepository.BulkAction.values()[index];
                 if(action==SQLiteSavedItemRepository.BulkAction.MOVE) {
                     worker.execute(()->{ List<String> folders=repository.folders(); activity.runOnUiThread(()->{ if(activity.isDestroyed()) return;

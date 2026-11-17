@@ -201,6 +201,38 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         return null;
     }
     SQLiteDatabase backupDatabase() { return helper.getWritableDatabase(); }
+    /** Import independent copies atomically; never overwrite an existing publication. */
+    public int importShared(PostShare.Preview preview,boolean keepExisting) throws Exception {
+        SQLiteDatabase db=helper.getWritableDatabase(); List<CachedMedia> installed=new ArrayList<>(); int added=0; boolean committed=false;
+        db.beginTransaction();
+        try {
+            for(PostShare.Post post:preview.posts()) {
+                if(keepExisting && !post.url().isEmpty() && findDuplicate(post.url())!=null) continue;
+                String id=java.util.UUID.randomUUID().toString(); long now=System.currentTimeMillis(); List<CachedMedia> media=new ArrayList<>();
+                for(PostShare.Photo photo:post.photos()) {
+                    try(java.io.InputStream input=new java.io.FileInputStream(new java.io.File(preview.directory(),photo.entry()))) {
+                        CachedMedia saved=new MediaCache(context).store(id,"keepr-share:"+java.util.UUID.randomUUID(),MediaCache.readBounded(input,MediaCache.MAX_BYTES));
+                        installed.add(saved); media.add(saved);
+                    }
+                }
+                SavedItem item=new SavedItem(id,post.url(),post.title(),post.description(),"","",post.price(),post.currency(),"",post.notes(),"Other",
+                    SavedItem.Status.ACTIVE,SavedItem.PreviewState.READY,"",now,now,"",List.of(),media,media.size(),0,0,post.location(),post.productType(),post.period(),"Shared copy · review these details",post.contacts());
+                insert(db,item);
+                // Keep exactly the reviewed fields, including intentionally absent contact information.
+                ContentValues values=contactValues(post.contacts(),false); values.put("contact_source","Shared copy · review before contacting"); values.put("contact_edited",1);
+                values.put("price",post.price()); values.put("currency",post.currency()); values.put("price_period",post.period()); values.put("location",post.location()); values.put("product_type",post.productType());
+                values.put("metadata_edited",1); values.put("title_edited",1); values.put("capture_version",4); values.put("expected_photos",media.size());
+                db.update("SavedItem",values,"id=?",new String[]{id});
+                for(CachedMedia photo:media) insertMedia(db,photo);
+                added++;
+            }
+            db.setTransactionSuccessful(); committed=true;
+        } finally {
+            try { db.endTransaction(); } catch(RuntimeException error) { committed=false; throw error; }
+            finally { if(!committed) for(CachedMedia photo:installed) new java.io.File(context.getFilesDir(),photo.relativePath()).delete(); }
+        }
+        emit(); return added;
+    }
     public void edit(String id, String title, String notes, String folder, String tagText) { edit(id,title,notes,folder,tagText,null); }
     public void edit(String id, String title, String notes, String folder, String tagText, ListingFacts facts) {
         if(facts!=null) {

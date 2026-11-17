@@ -1,6 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <application android:usesCleartextTraffic="true" android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.Keepr" android:supportsRtl="true">
+        <provider android:name=".SharedPostsProvider" android:authorities="${applicationId}.sharedfiles" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/shared_file_paths" />
+        </provider>
+        <activity android:name=".SharePostsActivity" android:exported="false" />
+        <activity android:name=".ImportPostsActivity" android:exported="true" android:label="@string/share_import_title">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="application/vnd.keepr.posts+zip" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.keepr.posts+zip" />
+            </intent-filter>
+        </activity>
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".TrashActivity" android:exported="false" />
         <activity android:name=".BackupActivity" android:exported="false" />

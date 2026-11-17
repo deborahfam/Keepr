@@ -99,6 +99,7 @@ public final class PostDetailActivity extends Activity {
             Button edit=button("Edit post",true); edit.setOnClickListener(v->showEdit(null));
             Button statusButton=button("Change status",false); statusButton.setId(R.id.change_status); statusButton.setOnClickListener(v->showStatusPicker());
             LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,-2,1); half.rightMargin=dp(8); actions.addView(edit,half); actions.addView(statusButton,new LinearLayout.LayoutParams(0,-2,1)); body.addView(actions,block());
+            Button share=button(getString(R.string.share_posts),false); share.setId(R.id.share_posts); share.setOnClickListener(v->SharePostsActivity.open(this,List.of(id))); body.addView(share,block());
             if(!item.media().isEmpty()) { gallery(); }
             listingDetails(); contactDetails();
             section("Description",PublicationText.clean(item.description().isEmpty()?item.sharedText():item.description()));

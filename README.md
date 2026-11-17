@@ -2,6 +2,19 @@
 
 An offline Android vault for deals, property listings, and marketplace/social posts. Native Java 17 / Android platform UI, Android 8.0+ (API 26), SQLite, WorkManager, OkHttp, and jsoup.
 
+## Share with another person
+
+Open a saved post and choose **Share posts**, or use **⋯ → Select posts → Actions → Share posts** for a selection.
+
+- **Share text summary** sends the reviewed title, price, location, product type and original link through Android’s share chooser. The recipient does not need Keepr.
+- **Prepare Keepr file with photos → Send Keepr file** sends a `.keepr` archive containing only the selected posts and their saved photos. It requires a Keepr version with sharing support to import.
+
+Notes, contact fields and publication captions are off by default and can be included explicitly. Folders, tags, tracking status, internal identifiers and download history are never exported. Review the text and photos before sending: contact details already present in titles, links, captions or images are not redacted. Shared files are unencrypted. A summary does not attach photos; a Keepr file includes all locally saved photos in the selection, not missing or pending downloads.
+
+Recipients can open the file with Keepr or use **⋯ → Import shared posts → Choose Keepr file** if a messenger/file manager does not recognize the file type. Keepr validates the archive and photo checksums, shows the incoming content, and waits for **Save shared copies**. Imports go into **Other**, start as **Active**, and never overwrite local posts. **Skip links already in my collection** is enabled by default; uncheck it to save another copy. URL matching follows the existing normalized-link rules; text-only and photo-only posts always become new copies. The whole import is transactional, including cleanup of copied photos if saving fails.
+
+Each person keeps an independent offline copy: no accounts, server, automatic source fetch, or ongoing synchronization. Imported listing/contact fields are preserved until the recipient edits them. Keep Keepr open while preparing or importing a file; rotation is supported, but jobs do not resume after process termination. Sharing is limited to 100 posts, 1,000 photos, 8 MiB per photo, 2 MiB of metadata and 256 MiB of uncompressed content per file. Messaging apps may impose lower attachment limits. Sharing uses temporary, read-only URI access to a dedicated cache directory; older export files are removed on subsequent exports after seven days.
+
 ## Listing details: price, location and product type
 
 Keepr extracts listing details locally from public page metadata (Open Graph and a single relevant JSON-LD Product, Offer or posting) and from the title/caption shared with the app. Explicit currency amounts in Spanish or English can become price suggestions; an unqualified `$` remains `$`, never an assumed USD. Monthly/day/week/year/hour prices retain their period. Conflicting prices, ranges and missing values remain empty. Location detection uses published address fields or explicit text labels such as `Ubicación: San Juan` and `Location: Austin`; it never uses your device location or the seller's address as the listing location. Product types can be suggested from a limited Spanish/English keyword dictionary.

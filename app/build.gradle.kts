@@ -18,6 +18,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.core:core:1.13.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
     implementation("androidx.work:work-runtime:2.10.1")
     implementation("org.jsoup:jsoup:1.24.1")

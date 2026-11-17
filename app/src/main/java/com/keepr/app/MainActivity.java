@@ -172,6 +172,7 @@ public final class MainActivity extends Activity {
         menuButton.setOnClickListener(v -> {
             PopupMenu menu = new PopupMenu(this, menuButton);
             menu.getMenu().add("Settings").setOnMenuItemClickListener(item -> { startActivity(new Intent(this, SettingsActivity.class)); return true; });
+            menu.getMenu().add(R.string.share_import_title).setOnMenuItemClickListener(item -> { startActivity(new Intent(this, ImportPostsActivity.class)); return true; });
             menu.getMenu().add("Filters and sorting").setOnMenuItemClickListener(item -> { collectionControls.showTools(); return true; });
             menu.getMenu().add("Select posts").setOnMenuItemClickListener(item -> { collectionControls.toggleSelection(); return true; });
             menu.getMenu().add("Clear search and filters").setOnMenuItemClickListener(item -> {
