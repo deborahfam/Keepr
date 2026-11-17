@@ -26,4 +26,8 @@
     <item name="share_posts" type="id" />
     <item name="previous_page" type="id" />
     <item name="next_page" type="id" />
+    <item name="manage_categories" type="id" />
+    <item name="category_add" type="id" />
+    <item name="category_name" type="id" />
+    <item name="category_destination" type="id" />
 </resources>

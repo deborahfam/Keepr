@@ -10,8 +10,8 @@
     <string name="search_finds">Search your finds</string>
     <string name="all_finds">All finds</string>
     <string name="item_options">Options for %1$s</string>
-    <string name="new_folder">New folder</string>
-    <string name="folder_name">Folder name</string>
+    <string name="new_folder">New category</string>
+    <string name="folder_name">Category name</string>
     <string name="view_saved_post">View saved post</string>
     <string name="saved_photo">Saved post photo</string>
     <string name="view_saved_photos">View saved post, %1$d photos</string>
@@ -29,12 +29,12 @@
     <string name="export_backup">Export backup</string>
     <string name="restore_backup">Restore backup</string>
     <string name="choose_backup">Choose backup</string>
-    <string name="backup_explanation">Save your posts, folders, tags, and offline photos in a ZIP file. Keep a copy outside this device to protect against device loss. Backups are not encrypted; store them somewhere you trust. Keep Keepr open until the operation finishes.</string>
+    <string name="backup_explanation">Save your posts, categories, tags, and offline photos in a ZIP file. Keep a copy outside this device to protect against device loss. Backups are not encrypted; store them somewhere you trust. Keep Keepr open until the operation finishes.</string>
     <string name="restore_explanation">Missing posts will be added. Posts already in your collection will stay unchanged, including edits made since the backup.</string>
     <string name="edit_post">Edit saved post</string>
     <string name="edit_title">Title</string>
     <string name="edit_notes">My notes</string>
-    <string name="edit_folder">Folder (choose or type a new name)</string>
+    <string name="edit_folder">Category (choose or type a new name)</string>
     <string name="edit_tags">Tags (comma separated)</string>
     <string name="save_changes">Save changes</string>
     <string name="all_statuses">All statuses</string>
@@ -47,7 +47,7 @@
     <string name="already_saved">This link is already saved</string>
     <string name="duplicate_explanation">%1$s
 
-Open the most recently saved copy, retry its public capture, or save a separate copy with this draft. Updating capture preserves saved notes, tags, folder, status, and edited title; draft changes and newly shared photos are only used when saving another copy.</string>
+Open the most recently saved copy, retry its public capture, or save a separate copy with this draft. Updating capture preserves saved notes, tags, category, status, and edited title; draft changes and newly shared photos are only used when saving another copy.</string>
     <string name="open_existing">Open existing</string>
     <string name="update_capture">Update capture</string>
     <string name="save_another_copy">Save another copy</string>
@@ -60,7 +60,7 @@ Open the most recently saved copy, retry its public capture, or save a separate 
     <string name="share_include_notes">Include my notes</string>
     <string name="share_include_contacts">Include contact fields</string>
     <string name="share_include_caption">Include publication captions</string>
-    <string name="share_privacy">Review before sharing. Titles, links, captions and photos may contain contact information. These options do not redact text or images. Files are not encrypted. Folders, tags and tracking status stay private.</string>
+    <string name="share_privacy">Review before sharing. Titles, links, captions and photos may contain contact information. These options do not redact text or images. Files are not encrypted. Categories, tags and tracking status stay private.</string>
     <string name="share_counts">Selected posts: %1$d · Saved photos in Keepr file: %2$d</string>
     <string name="share_preview">Text preview</string>
     <string name="share_summary">Share text summary</string>
@@ -84,4 +84,21 @@ Open the most recently saved copy, retry its public capture, or save a separate 
     <string name="share_invalid_file">Could not read this sharing file. It may be damaged, unsupported, too large, or no longer accessible. Choose a complete Keepr sharing file (up to 100 posts and 256 MiB).</string>
     <string name="share_import_failed">Could not save the shared posts. No shared copies were added. Check available storage and try again.</string>
     <plurals name="share_photos"><item quantity="one">%d saved photo</item><item quantity="other">%d saved photos</item></plurals>
+    <string name="categories_back">Back to collection</string>
+    <string name="categories_title">Your categories</string>
+    <string name="categories_description">Create, rename and remove categories without losing your saved posts.</string>
+    <string name="category_add">Add category</string>
+    <string name="category_rename">Rename</string>
+    <string name="category_remove">Remove category</string>
+    <string name="category_name">Category name</string>
+    <string name="category_name_help">Use a unique name with 1–60 characters. All is reserved for the collection filter.</string>
+    <string name="category_move_to">Move posts to</string>
+    <string name="category_remove_move">Remove “%1$s”? Choose a category for its posts, including those in Trash. Photos, notes and trash expiry dates are kept.</string>
+    <string name="category_remove_empty">Remove the empty category “%1$s”?</string>
+    <string name="category_keep_one">Keep at least one category. Add another category first.</string>
+    <string name="category_saved">Categories updated.</string>
+    <string name="category_failed">Could not update categories. Please try again.</string>
+    <string name="categories_loading">Loading categories…</string>
+    <string name="category_trash_count"> · %d in Trash</string>
+    <plurals name="category_saved_count"><item quantity="one">%d saved post</item><item quantity="other">%d saved posts</item></plurals>
 </resources>

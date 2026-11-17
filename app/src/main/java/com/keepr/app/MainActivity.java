@@ -31,7 +31,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class MainActivity extends Activity {
-    private static final String[] CATEGORIES = {"Real Estate", "Electronics", "Vehicles", "Jobs", "Marketplace", "Rentals", "Social", "Other"};
     private final List<SavedItem> links = new ArrayList<>();
     private SavedItemRepository store;
     private final ExecutorService databaseWorker = Executors.newSingleThreadExecutor();
@@ -71,18 +70,20 @@ public final class MainActivity extends Activity {
     private final int accent = UiStyles.ACCENT;
     private final int canvas = UiStyles.PAPER;
     private final int line = UiStyles.LINE;
-    private final List<String> folders = new ArrayList<>(java.util.Arrays.asList(CATEGORIES));
+    private final List<String> folders = new ArrayList<>();
     private LinearLayout folderChips;
     private final ExecutorService imageWorker = Executors.newFixedThreadPool(2);
     private androidx.lifecycle.Observer<List<androidx.work.WorkInfo>> workObserver;
     private androidx.lifecycle.LiveData<List<androidx.work.WorkInfo>> workUpdates;
     private final List<Button> categoryButtons = new ArrayList<>();
+    private List<SQLiteSavedItemRepository.CategorySummary> categorySummaries=List.of();
+    private String selectedCategoryId;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         listView = getSharedPreferences("appearance", MODE_PRIVATE).getBoolean("list_view", false);
         if(state!=null) {
-            pageOffset=Math.max(0,state.getInt("page_offset",0));
+            pageOffset=Math.max(0,state.getInt("page_offset",0)); selectedCategoryId=state.getString("selected_category_id");
             category=state.getString("filter_folder","All"); query=state.getString("filter_query","");
             String status=state.getString("filter_status"); if(status!=null) try { statusFilter=SavedItem.Status.valueOf(status); } catch(IllegalArgumentException ignored) { }
         }
@@ -102,10 +103,10 @@ public final class MainActivity extends Activity {
                     storageHealthy = true;
                     String selectedFolder=editorCategory==null || editorCategory.getSelectedItem()==null ? null : editorCategory.getSelectedItem().toString();
                     folders.clear(); folders.addAll(savedFolders);
-                    if (selectedFolder!=null) {
-                        if (!folders.contains(selectedFolder)) folders.add(selectedFolder);
+                    if (editorCategory!=null) {
+                        if (selectedFolder!=null && !folders.contains(selectedFolder)) folders.add(selectedFolder);
                         ((ArrayAdapter<?>)editorCategory.getAdapter()).notifyDataSetChanged();
-                        editorCategory.setSelection(folders.indexOf(selectedFolder));
+                        editorCategory.setSelection(Math.max(0,folders.indexOf(selectedFolder==null?"Other":selectedFolder)));
                     }
                     rebuildFolderChips(); requestPage(pageOffset,0);
                 } });
@@ -155,28 +156,34 @@ public final class MainActivity extends Activity {
         pageLoading=true; pageError=""; collectionControls.loading(filter);
         previousPage.setEnabled(false); nextPage.setEnabled(false); count.setText("Loading results…");
         // Keep the current bounded page visible while refreshing, preserving scroll position.
-        boolean retain=collectionControls.hasSelection();
+        boolean retain=collectionControls.hasSelection(); String requestedCategoryId=selectedCategoryId;
         pendingFeed=()->databaseWorker.execute(()->{
             if(generation!=feedGeneration) return;
             try {
                 SQLiteSavedItemRepository repository=(SQLiteSavedItemRepository)store;
-                SQLiteSavedItemRepository.Page page=repository.page(filter,offset,PAGE_SIZE);
-                int actualOffset=offset;
+                List<SQLiteSavedItemRepository.CategorySummary> categoryRows=repository.categories();
+                SQLiteSavedItemRepository.CategorySummary selectedCategory=null;
+                if(!filter.folder().equals("All")) for(var row:categoryRows) if(requestedCategoryId==null?row.name().equals(filter.folder()):row.id().equals(requestedCategoryId)) { selectedCategory=row; break; }
+                String resolvedCategory=selectedCategory==null?"All":selectedCategory.name();
+                String resolvedId=selectedCategory==null?null:selectedCategory.id();
+                FeedQuery effective=new FeedQuery(resolvedCategory,filter.text(),filter.status(),filter.tag(),filter.source(),filter.from(),filter.until(),filter.sort());
+                int actualOffset=!filter.folder().equals("All") && selectedCategory==null?0:offset;
+                SQLiteSavedItemRepository.Page page=repository.page(effective,actualOffset,PAGE_SIZE);
                 if(offset>0 && page.items().isEmpty()) {
                     actualOffset=page.total()==0?0:((page.total()-1)/PAGE_SIZE)*PAGE_SIZE;
-                    page=repository.page(filter,actualOffset,PAGE_SIZE);
+                    page=repository.page(effective,actualOffset,PAGE_SIZE);
                 }
                 if(generation!=feedGeneration) return;
-                List<String> matching=retain?repository.matchingIds(filter):null;
+                List<String> matching=retain?repository.matchingIds(effective):null;
                 List<String> savedFolders=repository.folders(),tags=repository.filterOptions(true),sources=repository.filterOptions(false);
                 SQLiteSavedItemRepository.CollectionStats stats=repository.collectionStats();
                 SQLiteSavedItemRepository.Page result=page; int resultOffset=actualOffset;
                 runOnUiThread(()->{
                     if(isDestroyed() || generation!=feedGeneration) return;
-                    pageLoading=false; displayedQuery=filter; pageOffset=resultOffset; totalResults=result.total(); totalSaved=stats.total(); attentionCount=stats.attention();
+                    pageLoading=false; displayedQuery=effective; category=resolvedCategory; selectedCategoryId=resolvedId; categorySummaries=categoryRows; pageOffset=resultOffset; totalResults=result.total(); totalSaved=stats.total(); attentionCount=stats.attention();
                     links.clear(); links.addAll(result.items());
                     folders.clear(); folders.addAll(savedFolders); rebuildFolderChips();
-                    collectionControls.loaded(matching,tags,sources); drawCards();
+                    collectionControls.loading(effective); collectionControls.loaded(matching,tags,sources); drawCards();
                 });
             } catch(Exception error) { runOnUiThread(()->{
                 if(isDestroyed() || generation!=feedGeneration) return;
@@ -197,14 +204,16 @@ public final class MainActivity extends Activity {
 
         LinearLayout brand = new LinearLayout(this); brand.setGravity(android.view.Gravity.CENTER_VERTICAL);
         brand.setPadding(dp(24), dp(12), dp(24), dp(12));
-        View mark = new View(this); mark.setBackground(surface(accent, 4, 0));
-        brand.addView(mark, new LinearLayout.LayoutParams(dp(10), dp(32)));
+        View mark = new View(this); mark.setBackground(surface(accent, 6, 0));
+        brand.addView(mark, new LinearLayout.LayoutParams(dp(8), dp(28)));
         LinearLayout identity = column();
-        TextView name = label("Keepr", 30, ink); name.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        TextView name = label("keepr", 27, ink); name.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         name.setPadding(0,0,0,0); identity.addView(name);
         collectionSummary = label("Opening your collection…", 12, muted); identity.addView(collectionSummary);
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1); nameParams.leftMargin = dp(12);
         brand.addView(identity, nameParams);
+        Button quickSave=button("＋",true); quickSave.setTextSize(24); quickSave.setContentDescription("Save new post"); quickSave.setOnClickListener(v->showEditor(""));
+        LinearLayout.LayoutParams saveParams=new LinearLayout.LayoutParams(dp(48),dp(48)); saveParams.rightMargin=dp(8); brand.addView(quickSave,saveParams);
         Button menuButton = button("⋯", false); menuButton.setTextSize(24);
         menuButton.setContentDescription("Collection options");
         menuButton.setBackground(interactive(UiStyles.SURFACE, 16, line));
@@ -218,7 +227,7 @@ public final class MainActivity extends Activity {
             menu.getMenu().add("Clear search and filters").setOnMenuItemClickListener(item -> {
                 category="All"; updateFilters(); query=""; statusFilter=null; collectionControls.reset(); search.setText(""); statuses.setSelection(0); renderCards(); return true;
             });
-            menu.getMenu().add("Manage folders").setOnMenuItemClickListener(item -> { collectionControls.showFolders(); return true; });
+            menu.getMenu().add("Manage categories").setOnMenuItemClickListener(item -> { collectionControls.showFolders(); return true; });
             menu.getMenu().add(R.string.backup_restore).setOnMenuItemClickListener(item -> { startActivity(new Intent(this, BackupActivity.class)); return true; });
             menu.getMenu().add("Trash").setOnMenuItemClickListener(item -> { startActivity(new Intent(this, TrashActivity.class)); return true; });
             menu.show();
@@ -228,10 +237,6 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this); collectionScroll=scroll; scroll.setFillViewport(true); scroll.setClipToPadding(false);
         LinearLayout content = column(); content.setPadding(dp(20), 0, dp(20), dp(24));
         scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        Button add = button("＋  Save new post", true);
-        add.setOnClickListener(v -> showEditor(""));
-        LinearLayout.LayoutParams addParams = new LinearLayout.LayoutParams(-1, dp(54)); addParams.bottomMargin=dp(16);
-        content.addView(add, addParams);
         LinearLayout searchRow = new LinearLayout(this); searchRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         searchRow.setBackground(surface(UiStyles.SURFACE, 16, line));
         search = new EditText(this); search.setSingleLine(true);
@@ -263,8 +268,8 @@ public final class MainActivity extends Activity {
         });
         LinearLayout categoryHeading = new LinearLayout(this); categoryHeading.setGravity(android.view.Gravity.CENTER_VERTICAL);
         categoryHeading.setPadding(0,dp(12),0,0);
-        categoryHeading.addView(label("Categories",14,muted),new LinearLayout.LayoutParams(0,-2,1));
-        Button manage=button("Manage",false); manage.setBackgroundColor(Color.TRANSPARENT); manage.setOnClickListener(v->collectionControls.showFolders());
+        categoryHeading.addView(label("Browse categories",15,ink),new LinearLayout.LayoutParams(0,-2,1));
+        Button manage=button("Manage",false); manage.setId(R.id.manage_categories); manage.setContentDescription("Add, rename or remove categories"); manage.setBackgroundColor(Color.TRANSPARENT); manage.setOnClickListener(v->collectionControls.showFolders());
         categoryHeading.addView(manage); content.addView(categoryHeading);
         HorizontalScrollView filters = new HorizontalScrollView(this); filters.setHorizontalScrollBarEnabled(false);
         filters.setPadding(0, dp(8), 0, dp(6));
@@ -285,7 +290,7 @@ public final class MainActivity extends Activity {
         collectionHeading.setGravity(android.view.Gravity.CENTER_VERTICAL);
         collectionHeading.setPadding(0, dp(14), 0, dp(14));
         LinearLayout collectionTitle=column();
-        TextView savedHeading=label("Your saves",20,ink); savedHeading.setTypeface(null,Typeface.BOLD); collectionTitle.addView(savedHeading);
+        TextView savedHeading=label("Saved for later",23,ink); savedHeading.setTypeface(null,Typeface.BOLD); collectionTitle.addView(savedHeading);
         count = label("", 12, muted); collectionTitle.addView(count);
         collectionHeading.addView(collectionTitle, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout viewChoices = new LinearLayout(this);
@@ -307,8 +312,8 @@ public final class MainActivity extends Activity {
         previousPage.setOnClickListener(v->{ requestPage(Math.max(0,pageOffset-PAGE_SIZE),0); collectionScroll.smoothScrollTo(0,0); });
         nextPage.setOnClickListener(v->{ requestPage(pageOffset+PAGE_SIZE,0); collectionScroll.smoothScrollTo(0,0); });
 
-        TextView offline=label("Downloaded photos work offline. Some captures may still be pending.",13,0xffA5D5BD);
-        offline.setPadding(dp(14),dp(14),dp(14),dp(14)); offline.setBackground(surface(0xff10201A,16,0));
+        TextView offline=label("Your saved photos are available offline.",12,muted);
+        offline.setPadding(0,dp(18),0,dp(18)); offline.setGravity(android.view.Gravity.CENTER);
         content.addView(offline);
         setContentView(root); renderCards();
     }
@@ -318,11 +323,12 @@ public final class MainActivity extends Activity {
         folderChips.removeAllViews(); categoryButtons.clear();
         List<String> options = new ArrayList<>(); options.add("All"); options.addAll(folders);
         for (String option : options) {
-            Button chip = button(option.equals("All") ? getString(R.string.all_finds) : option, false);
+            int savedCount=totalSaved; if(!option.equals("All")) { savedCount=0; for(var summary:categorySummaries) if(summary.name().equals(option)) { savedCount=summary.saved(); break; } }
+            Button chip = button((option.equals("All") ? getString(R.string.all_finds) : option)+"  "+savedCount, false);
             chip.setTag(option); chip.setTextSize(13); chip.setMinHeight(dp(48));
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, dp(48)); cp.rightMargin = dp(8);
             folderChips.addView(chip, cp); categoryButtons.add(chip);
-            chip.setOnClickListener(v -> { category = option; updateFilters(); renderCards(); });
+            chip.setOnClickListener(v -> { category = option; selectedCategoryId=null; for(var summary:categorySummaries) if(summary.name().equals(option)) selectedCategoryId=summary.id(); updateFilters(); renderCards(); });
         }
         updateFilters();
     }
@@ -330,8 +336,8 @@ public final class MainActivity extends Activity {
     private void updateFilters() {
         for (Button chip : categoryButtons) {
             boolean selected = category.equals(chip.getTag());
-            chip.setSelected(selected); chip.setTextColor(selected ? Color.WHITE : muted);
-            chip.setBackground(interactive(selected ? accent : UiStyles.SURFACE, 24, selected ? 0 : line));
+            chip.setSelected(selected); chip.setTextColor(selected ? UiStyles.ACCENT_TEXT : muted);
+            chip.setBackground(interactive(selected ? UiStyles.SOFT : UiStyles.SURFACE, 16, selected ? UiStyles.ACCENT_TEXT : line));
             chip.setTypeface(null, selected ? Typeface.BOLD : Typeface.NORMAL);
         }
     }
@@ -396,42 +402,36 @@ public final class MainActivity extends Activity {
 
     private LinearLayout savedItemView(SavedItem item) {
         LinearLayout card=column(); card.setTag(listView?"list":"cards");
-        card.setPadding(dp(12),dp(12),dp(12),dp(12));
-        card.setBackground(surface(UiStyles.SURFACE,20,line));
-        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2); params.bottomMargin=dp(12); card.setLayoutParams(params);
+        card.setPadding(dp(14),dp(14),dp(14),dp(14)); card.setBackground(surface(UiStyles.SURFACE,22,line));
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2); params.bottomMargin=dp(16); card.setLayoutParams(params);
         collectionControls.addSelection(card,item);
         String folder=item.categoryId()==null?"Other":item.categoryId();
-        LinearLayout row=new LinearLayout(this); row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        int width=listView?68:100, height=listView?90:138;
-        android.widget.FrameLayout cover=new android.widget.FrameLayout(this);
-        cover.setBackground(surface(categoryTint(folder),14,0)); cover.setClipToOutline(true);
-        View thumbnail;
+        android.widget.FrameLayout cover=new android.widget.FrameLayout(this); cover.setBackground(surface(UiStyles.PAPER,14,0)); cover.setClipToOutline(true);
+        int height=listView?96:item.media().isEmpty()?112:190;
         if(item.media().isEmpty()) {
-            TextView placeholder=label(categorySymbol(folder),36,categoryColor(folder)); placeholder.setGravity(android.view.Gravity.CENTER);
-            GradientDrawable gradient=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{categoryTint(folder),UiStyles.PAPER});
-            placeholder.setBackground(gradient); thumbnail=placeholder;
-        } else thumbnail=photo(item.media().get(0),height);
-        cover.addView(thumbnail,new android.widget.FrameLayout.LayoutParams(-1,-1));
-        if(!listView && !item.media().isEmpty()) {
-            TextView photos=badge(item.media().size()+(item.media().size()==1?" photo":" photos"),ink,0xdd09090B);
-            android.widget.FrameLayout.LayoutParams pp=new android.widget.FrameLayout.LayoutParams(-2,-2,android.view.Gravity.BOTTOM|android.view.Gravity.CENTER_HORIZONTAL);
-            pp.bottomMargin=dp(8); cover.addView(photos,pp);
+            LinearLayout placeholder=column(); placeholder.setGravity(android.view.Gravity.CENTER); placeholder.setBackground(surface(UiStyles.PAPER,14,0));
+            TextView mark=label(folder.isEmpty()?"K":folder.substring(0,folder.offsetByCodePoints(0,1)).toUpperCase(Locale.ROOT),30,UiStyles.ACCENT_TEXT); mark.setGravity(android.view.Gravity.CENTER); placeholder.addView(mark);
+            if(!listView) { TextView caption=label("No saved photo",12,muted); caption.setGravity(android.view.Gravity.CENTER); placeholder.addView(caption); }
+            cover.addView(placeholder,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        } else {
+            cover.addView(photo(item.media().get(0),height),new android.widget.FrameLayout.LayoutParams(-1,-1));
+            if(!listView) { TextView photos=badge(item.media().size()+(item.media().size()==1?" photo":" photos"),ink,0xdd09090B);
+                android.widget.FrameLayout.LayoutParams pp=new android.widget.FrameLayout.LayoutParams(-2,-2,android.view.Gravity.BOTTOM|android.view.Gravity.END); pp.setMargins(dp(10),dp(10),dp(10),dp(10)); cover.addView(photos,pp); }
         }
-        cover.setContentDescription(getString(R.string.view_saved_post)+": "+item.title());
-        cover.setOnClickListener(v->showSavedPost(item)); row.addView(cover,new LinearLayout.LayoutParams(dp(width),dp(height)));
-        LinearLayout info=column(); info.setPadding(dp(12),0,0,0);
+        cover.setContentDescription(getString(R.string.view_saved_post)+": "+item.title()); cover.setOnClickListener(v->showSavedPost(item));
+        LinearLayout info=column();
         LinearLayout top=new LinearLayout(this); top.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        TextView source=label(item.siteName().isEmpty()?folder:item.siteName(),11,UiStyles.ACCENT_TEXT);
-        source.setMaxLines(1); source.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        TextView source=label(folder,12,UiStyles.ACCENT_TEXT); source.setMaxLines(1); source.setEllipsize(android.text.TextUtils.TruncateAt.END);
         top.addView(source,new LinearLayout.LayoutParams(0,-2,1)); top.addView(itemMenu(item),new LinearLayout.LayoutParams(dp(48),dp(48))); info.addView(top);
-        TextView title=itemTitle(item,listView?15:18); title.setPadding(0,0,0,dp(4)); info.addView(title);
-        if(!item.price().isEmpty()) { TextView price=label((item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod()),listView?14:16,ink); price.setTypeface(null,Typeface.BOLD); info.addView(price); }
-        if(!item.location().isEmpty()) { TextView location=label(item.location(),12,muted); location.setMaxLines(1); location.setEllipsize(android.text.TextUtils.TruncateAt.END); info.addView(location); }
-        int statusColor=item.status()==SavedItem.Status.ACTIVE?0xff71D5AD:item.status()==SavedItem.Status.REACHED_OUT?0xffF4C567:muted;
-        TextView status=label("●  "+StatusLabels.label(this,item.status()),11,statusColor); info.addView(status);
-        TextView capture=label(item.captureSummary(),11,muted); capture.setMaxLines(2); capture.setEllipsize(android.text.TextUtils.TruncateAt.END); info.addView(capture);
+        TextView title=itemTitle(item,listView?16:21); title.setPadding(0,0,0,dp(6)); info.addView(title);
+        if(!item.price().isEmpty()) { TextView price=label((item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod()),listView?15:20,ink); price.setTypeface(null,Typeface.BOLD); info.addView(price); }
+        if(!item.location().isEmpty()) { TextView location=label(item.location(),13,muted); location.setMaxLines(1); location.setEllipsize(android.text.TextUtils.TruncateAt.END); info.addView(location); }
+        TextView status=label(StatusLabels.label(this,item.status()),12,item.status()==SavedItem.Status.ACTIVE?0xff9CD3B8:muted); info.addView(status);
+        TextView capture=label(item.captureSummary(),12,muted); capture.setMaxLines(2); capture.setEllipsize(android.text.TextUtils.TruncateAt.END); info.addView(capture);
         info.setOnClickListener(v->showSavedPost(item));
-        row.addView(info,new LinearLayout.LayoutParams(0,-2,1)); card.addView(row); return card;
+        if(listView) { LinearLayout row=new LinearLayout(this); row.setGravity(android.view.Gravity.CENTER_VERTICAL); row.addView(cover,new LinearLayout.LayoutParams(dp(76),dp(height))); info.setPadding(dp(14),0,0,0); row.addView(info,new LinearLayout.LayoutParams(0,-2,1)); card.addView(row); }
+        else { card.addView(cover,new LinearLayout.LayoutParams(-1,dp(height))); card.addView(info); }
+        return card;
     }
 
     private TextView itemTitle(SavedItem item, int size) {
@@ -472,10 +472,10 @@ public final class MainActivity extends Activity {
         EditText url = field(form,"Original link (optional for a shared photo)");
         url.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI); url.setText(sharedUrl);
         EditText title = field(form,"Title (optional)");
-        form.addView(label("FOLDER",11,muted));
+        form.addView(label("CATEGORY",11,muted));
         Spinner categories = new Spinner(this);
         ArrayAdapter<String> folderAdapter = new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,folders);
-        categories.setAdapter(folderAdapter); categories.setContentDescription("Folder");
+        categories.setAdapter(folderAdapter); categories.setContentDescription("Category");
         categories.setBackground(surface(canvas,12,line)); form.addView(categories,new LinearLayout.LayoutParams(-1,dp(52)));
         categories.setSelection(Math.max(0,folders.indexOf(category.equals("All") ? "Other" : category)));
         Button newFolder = button(getString(R.string.new_folder),false); form.addView(newFolder,new LinearLayout.LayoutParams(-1,dp(48)));
@@ -485,7 +485,7 @@ public final class MainActivity extends Activity {
                     .setNegativeButton("Cancel",null).setPositiveButton("Create",null).create();
             create.setOnShowListener(d -> create.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
                 String value = name.getText().toString().trim();
-                if (value.isEmpty() || value.length() > 60 || value.equalsIgnoreCase("All")) { name.setError("Use a folder name from 1 to 60 characters, other than All."); return; }
+                if (value.isEmpty() || value.length() > 60 || value.equalsIgnoreCase("All")) { name.setError("Use a category name from 1 to 60 characters, other than All."); return; }
                 int selected = -1;
                 for (int i=0;i<folders.size();i++) if (folders.get(i).equalsIgnoreCase(value)) selected=i;
                 if (selected < 0) { folders.add(value); selected=folders.size()-1; }
@@ -540,6 +540,7 @@ public final class MainActivity extends Activity {
                 if (itemTitle.isEmpty()) itemTitle = normalized.isEmpty() ? "Shared post" : java.net.URI.create(normalized).getHost();
                 long now=System.currentTimeMillis(); String id=java.util.UUID.randomUUID().toString();
                 String savedTitle=com.keepr.app.data.PublicationText.clean(itemTitle), postText=com.keepr.app.data.PublicationText.clean(text.getText().toString()), myNotes=notes.getText().toString().trim();
+                if(categories.getSelectedItem()==null) throw new IllegalArgumentException("Create a category before saving.");
                 String folder=categories.getSelectedItem().toString();
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false); dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setEnabled(false);
                 dialog.setCancelable(false);
@@ -642,13 +643,13 @@ public final class MainActivity extends Activity {
             out.putString("draft_url", editorUrl.getText().toString());
             out.putString("draft_title", editorTitle.getText().toString());
             out.putString("draft_notes", editorNotes.getText().toString());
-            out.putString("draft_folder",editorCategory.getSelectedItem().toString());
+            if(editorCategory.getSelectedItem()!=null) out.putString("draft_folder",editorCategory.getSelectedItem().toString());
             out.putString("draft_text",editorText.getText().toString()); out.putString("draft_tags",editorTags.getText().toString());
             out.putString("shared_text",editorSharedText);
             ArrayList<String> uris=new ArrayList<>(); for (Uri uri : editorAttachments) uris.add(uri.toString());
             out.putStringArrayList("draft_attachments",uris);
         }
-        out.putInt("page_offset",pageLoading?desiredOffset:pageOffset);
+        out.putInt("page_offset",pageLoading?desiredOffset:pageOffset); out.putString("selected_category_id",selectedCategoryId);
         out.putString("filter_folder",category); out.putString("filter_query",query); out.putString("filter_status",statusFilter==null?null:statusFilter.name());
         collectionControls.save(out);
         super.onSaveInstanceState(out);
@@ -731,33 +732,6 @@ public final class MainActivity extends Activity {
     private TextView badge(String text, int foreground, int background) {
         TextView badge = label(text, 10, foreground); badge.setTypeface(null, Typeface.BOLD);
         badge.setPadding(dp(10), dp(7), dp(10), dp(7)); badge.setBackground(surface(background, 10, 0)); return badge;
-    }
-    private int categoryColor(String category) {
-        switch (category) {
-            case "Real Estate": case "Rentals": return 0xffEFB09D;
-            case "Electronics": return 0xffB3C4E8;
-            case "Vehicles": return 0xffACCCBC;
-            case "Jobs": return 0xffDEC391;
-            default: return UiStyles.ACCENT_TEXT;
-        }
-    }
-    private int categoryTint(String category) {
-        switch (category) {
-            case "Real Estate": case "Rentals": return 0xff44302C;
-            case "Electronics": return 0xff2D3446;
-            case "Vehicles": return 0xff293C33;
-            case "Jobs": return 0xff40382A;
-            default: return UiStyles.SOFT;
-        }
-    }
-    private String categorySymbol(String category) {
-        switch (category) {
-            case "Real Estate": case "Rentals": return "⌂";
-            case "Electronics": return "▣";
-            case "Vehicles": return "↗";
-            case "Jobs": return "▤";
-            default: return "↗";
-        }
     }
     private LinearLayout column() { LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL); return layout; }
     private TextView label(String text, int size, int color) {

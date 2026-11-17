@@ -248,7 +248,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
         title=title.trim(); folder=folder.trim();
         if(title.isEmpty() || title.length()>1000) throw new IllegalArgumentException("Use a title from 1 to 1,000 characters.");
         if(notes.length()>65536) throw new IllegalArgumentException("Notes must be under 65,536 characters.");
-        if(folder.isEmpty() || folder.length()>60 || folder.equalsIgnoreCase("All")) throw new IllegalArgumentException("Use a folder name from 1 to 60 characters, other than All.");
+        if(folder.isEmpty() || folder.length()>60 || folder.equalsIgnoreCase("All")) throw new IllegalArgumentException("Use a category name from 1 to 60 characters, other than All.");
         List<String> normalized=com.keepr.app.domain.TagNames.parse(tagText);
         SQLiteDatabase db=helper.getWritableDatabase(); db.beginTransaction();
         try {
@@ -277,8 +277,44 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     }
     private String validFolder(String name) {
         name=name.trim();
-        if(name.isEmpty() || name.length()>60 || name.equalsIgnoreCase("All")) throw new IllegalArgumentException("Use a folder name from 1 to 60 characters, other than All.");
+        if(name.isEmpty() || name.length()>60 || name.equalsIgnoreCase("All")) throw new IllegalArgumentException("Use a category name from 1 to 60 characters, other than All.");
         return name;
+    }
+    public record CategorySummary(String id,String name,int saved,int trashed) {}
+    public List<CategorySummary> categories() {
+        List<CategorySummary> result=new ArrayList<>();
+        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT c.id,c.name,COUNT(s.id)-COUNT(t.saved_item_id),COUNT(t.saved_item_id) FROM Category c LEFT JOIN SavedItem s ON s.category_id=c.id LEFT JOIN Trash t ON t.saved_item_id=s.id GROUP BY c.id,c.name ORDER BY c.name COLLATE NOCASE",null)) {
+            while(c.moveToNext()) result.add(new CategorySummary(c.getString(0),c.getString(1),c.getInt(2),c.getInt(3)));
+        } return result;
+    }
+    public void saveCategory(String id,String name) {
+        name=validFolder(name); SQLiteDatabase db=helper.getWritableDatabase(); db.beginTransaction();
+        try {
+            try(Cursor c=db.rawQuery("SELECT id FROM Category WHERE name=? COLLATE NOCASE",new String[]{name})) {
+                if(c.moveToFirst() && !c.getString(0).equals(id)) throw new IllegalArgumentException("A category with this name already exists.");
+            }
+            if(id==null) ensureFolder(db,name);
+            else { ContentValues values=new ContentValues(); values.put("name",name); if(db.update("Category",values,"id=?",new String[]{id})!=1) throw new IllegalStateException("This category no longer exists."); }
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+        emit();
+    }
+    /** Removing a category never deletes posts, media or trash retention information. */
+    public void removeCategory(String id,String destinationId) {
+        SQLiteDatabase db=helper.getWritableDatabase(); db.beginTransaction();
+        try {
+            try(Cursor c=db.rawQuery("SELECT COUNT(*) FROM Category",null)) { c.moveToFirst(); if(c.getInt(0)<=1) throw new IllegalStateException("Keep at least one category. Add another category first."); }
+            if(destinationId!=null) {
+                if(id.equals(destinationId)) throw new IllegalArgumentException("Choose a different category.");
+                try(Cursor c=db.rawQuery("SELECT 1 FROM Category WHERE id=?",new String[]{destinationId})) { if(!c.moveToFirst()) throw new IllegalStateException("The destination category no longer exists."); }
+            } else {
+                try(Cursor c=db.rawQuery("SELECT 1 FROM SavedItem WHERE category_id=? LIMIT 1",new String[]{id})) { if(c.moveToFirst()) throw new IllegalArgumentException("Choose where to move the posts in this category."); }
+            }
+            if(destinationId!=null) db.execSQL("UPDATE SavedItem SET category_id=? WHERE category_id=?",new Object[]{destinationId,id});
+            if(db.delete("Category","id=?",new String[]{id})!=1) throw new IllegalStateException("This category no longer exists.");
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+        emit();
     }
     public enum BulkAction { MOVE, ADD_TAGS, ARCHIVE, DELETE }
     public int bulk(java.util.Collection<String> ids,BulkAction action,String value) {

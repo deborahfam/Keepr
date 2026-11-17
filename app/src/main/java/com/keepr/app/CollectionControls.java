@@ -114,13 +114,13 @@ final class CollectionControls {
     private void showActions() {
         if(busy || queryBusy || selected.isEmpty()) return;
         dialog=new AlertDialog.Builder(activity).setTitle(selected.size()+" selected posts")
-            .setItems(new String[]{"Move to folder","Add tags","Archive","Move to trash",activity.getString(R.string.share_posts)},(d,index)->{
+            .setItems(new String[]{"Move to category","Add tags","Archive","Move to trash",activity.getString(R.string.share_posts)},(d,index)->{
                 List<String> ids=new ArrayList<>(selected);
                 if(index==4) { SharePostsActivity.open(activity,ids); return; }
                 SQLiteSavedItemRepository.BulkAction action=SQLiteSavedItemRepository.BulkAction.values()[index];
                 if(action==SQLiteSavedItemRepository.BulkAction.MOVE) {
                     worker.execute(()->{ List<String> folders=repository.folders(); activity.runOnUiThread(()->{ if(activity.isDestroyed()) return;
-                        LinearLayout form=form(); AutoCompleteTextView target=new AutoCompleteTextView(activity); target.setHint("Choose or type a folder"); target.setSingleLine(true); target.setThreshold(0);
+                        LinearLayout form=form(); AutoCompleteTextView target=new AutoCompleteTextView(activity); target.setHint("Choose or type a category"); target.setSingleLine(true); target.setThreshold(0);
                         target.setAdapter(new ArrayAdapter<>(activity,android.R.layout.simple_dropdown_item_1line,folders)); target.setOnClickListener(v->target.showDropDown()); form.addView(target);
                         dialog(form,"Move "+ids.size()+" posts","Move",()->runBulk(ids,action,target.getText().toString()));
                     }); });
@@ -142,25 +142,7 @@ final class CollectionControls {
         },()->{ selected.clear(); selecting=false; });
     }
     void showFolders() {
-        if(busy) return;
-        worker.execute(()->{ List<String> folders=repository.folders(); activity.runOnUiThread(()->{ if(activity.isDestroyed()) return;
-            dialog=new AlertDialog.Builder(activity).setTitle("Manage folders").setItems(folders.toArray(new String[0]),(d,index)->{
-                String sourceFolder=folders.get(index);
-                dialog=new AlertDialog.Builder(activity).setTitle(sourceFolder).setItems(new String[]{"Rename folder","Merge into another folder"},(choice,operation)->{
-                    LinearLayout form=form(); boolean merge=operation==1;
-                    if(merge) {
-                        List<String> destinations=new ArrayList<>(folders); destinations.remove(sourceFolder);
-                        if(destinations.isEmpty()) { toast("Create another folder before merging."); return; }
-                        Spinner target=choices(form,"Destination folder",destinations,"",null);
-                        TextView note=new TextView(activity); note.setText("All posts will move into the destination. The source folder will be removed."); form.addView(note);
-                        dialog(form,"Merge "+sourceFolder,"Merge folders",()->folderOperation(sourceFolder,target.getSelectedItem().toString(),true));
-                    } else { EditText name=field(form,"Folder name",sourceFolder); dialog(form,"Rename folder","Rename",()->folderOperation(sourceFolder,name.getText().toString().trim(),false)); }
-                }).setNegativeButton(android.R.string.cancel,null).show();
-            }).setNegativeButton(android.R.string.cancel,null).show();
-        }); });
-    }
-    private void folderOperation(String sourceFolder,String destination,boolean merge) {
-        run(()->{ repository.organizeFolder(sourceFolder,destination,merge); return merge?"Folders merged":"Folder renamed"; },()->folderChanged.accept(sourceFolder,destination));
+        if(!busy) activity.startActivity(new android.content.Intent(activity,CategoriesActivity.class));
     }
     private interface Operation { String execute() throws Exception; }
     private void run(Operation operation,Runnable after) {
