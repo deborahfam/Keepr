@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit;
 public final class TrashWorker extends Worker {
     public TrashWorker(Context context,WorkerParameters parameters) { super(context,parameters); }
     public static void schedule(Context context) {
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork("keepr-trash-cleanup",ExistingPeriodicWorkPolicy.KEEP,new PeriodicWorkRequest.Builder(TrashWorker.class,1,TimeUnit.DAYS).build());
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork("keepr-trash-cleanup",ExistingPeriodicWorkPolicy.UPDATE,new PeriodicWorkRequest.Builder(TrashWorker.class,1,TimeUnit.DAYS).setConstraints(new Constraints.Builder().setRequiresBatteryNotLow(true).setRequiresDeviceIdle(true).build()).build());
     }
     @Override public Result doWork() {
         try(SQLiteSavedItemRepository repository=new SQLiteSavedItemRepository(getApplicationContext())) { repository.purgeExpired(); return Result.success(); }

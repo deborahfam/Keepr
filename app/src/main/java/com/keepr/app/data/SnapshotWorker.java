@@ -11,8 +11,8 @@ public final class SnapshotWorker extends Worker {
     public static void enqueue(Context context,String itemId) {
         OneTimeWorkRequest work=new OneTimeWorkRequest.Builder(SnapshotWorker.class)
                 .setInputData(new Data.Builder().putString("item_id",itemId).build())
-                .setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .setBackoffCriteria(BackoffPolicy.LINEAR,10,TimeUnit.SECONDS)
+                .setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,1,TimeUnit.MINUTES)
                 .addTag("keepr-snapshot").build();
         WorkManager.getInstance(context).enqueueUniqueWork("snapshot-"+itemId,ExistingWorkPolicy.KEEP,work);
     }
@@ -20,8 +20,8 @@ public final class SnapshotWorker extends Worker {
     public static void refresh(Context context,String itemId) {
         OneTimeWorkRequest work=new OneTimeWorkRequest.Builder(SnapshotWorker.class)
                 .setInputData(new Data.Builder().putString("item_id",itemId).putBoolean("refresh",true).build())
-                .setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .setBackoffCriteria(BackoffPolicy.LINEAR,10,TimeUnit.SECONDS).addTag("keepr-snapshot").build();
+                .setConstraints(new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).setRequiresBatteryNotLow(true).build())
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL,1,TimeUnit.MINUTES).addTag("keepr-snapshot").build();
         WorkManager.getInstance(context).enqueueUniqueWork("snapshot-"+itemId,ExistingWorkPolicy.APPEND_OR_REPLACE,work);
     }
     public SnapshotWorker(Context context,WorkerParameters params) { super(context,params); }

@@ -65,6 +65,7 @@ public final class MainActivity extends Activity {
     private CollectionControls collectionControls;
     private boolean storageHealthy = false;
     private boolean resumedOnce;
+    private boolean screenStarted;
     private final int ink = UiStyles.INK;
     private final int muted = UiStyles.MUTED;
     private final int accent = UiStyles.ACCENT;
@@ -134,7 +135,22 @@ public final class MainActivity extends Activity {
         } else if (state == null) receiveShare(getIntent());
         workObserver = infos -> { if (!isDestroyed() && storageHealthy) reloadCollection(); };
         workUpdates=androidx.work.WorkManager.getInstance(this).getWorkInfosByTagLiveData("keepr-snapshot");
+
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        screenStarted=true;
         workUpdates.observeForever(workObserver);
+    }
+    @Override protected void onStop() {
+        screenStarted=false;
+        workUpdates.removeObserver(workObserver);
+        feedHandler.removeCallbacks(refreshFeed);
+        if(pendingFeed!=null) feedHandler.removeCallbacks(pendingFeed);
+        feedGeneration++;
+        pageLoading=false;
+        super.onStop();
     }
 
     @Override protected void onResume() {
@@ -144,11 +160,11 @@ public final class MainActivity extends Activity {
         reloadCollection();
     }
     private void reloadCollection() {
-        if(isDestroyed() || !storageHealthy) return;
+        if(!screenStarted || isDestroyed() || !storageHealthy) return;
         feedHandler.removeCallbacks(refreshFeed); feedHandler.postDelayed(refreshFeed,150);
     }
     private void requestPage(int offset,int delay) {
-        if(!storageHealthy || isDestroyed()) return;
+        if(!screenStarted || !storageHealthy || isDestroyed()) return;
         FeedQuery filter=collectionControls.query(category,query,statusFilter);
         int generation=++feedGeneration; desiredOffset=offset;
         feedHandler.removeCallbacks(refreshFeed);

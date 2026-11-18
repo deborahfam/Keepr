@@ -71,7 +71,7 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     }
     public List<String> pendingItemIds() {
         List<String> ids=new ArrayList<>();
-        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT id FROM SavedItem WHERE url!='' AND (preview_state='PENDING' OR capture_version<4) AND id NOT IN (SELECT saved_item_id FROM Trash)",null)) { while(c.moveToNext()) ids.add(c.getString(0)); } return ids;
+        try(Cursor c=helper.getReadableDatabase().rawQuery("SELECT id FROM SavedItem WHERE url!='' AND (preview_state='PENDING' OR (capture_version<4 AND preview_state!='FAILED')) AND id NOT IN (SELECT saved_item_id FROM Trash)",null)) { while(c.moveToNext()) ids.add(c.getString(0)); } return ids;
     }
     public List<String> filterOptions(boolean tags) {
         List<String> values=new ArrayList<>();

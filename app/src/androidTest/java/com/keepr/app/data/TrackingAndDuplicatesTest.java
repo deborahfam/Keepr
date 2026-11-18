@@ -20,6 +20,28 @@ public class TrackingAndDuplicatesTest {
         return new SavedItem(id,url,title,"Caption","","","100","USD","","Keep my note",folder,SavedItem.Status.ACTIVE,
             SavedItem.PreviewState.READY,"",100,100,"Original",List.of("tag"),List.of());
     }
+    @Test public void failedCapturesStayStoppedUntilExplicitRetry() throws Exception {
+        String db="capture-retry-"+UUID.randomUUID()+".db";
+        try {
+            try(SQLiteSavedItemRepository repository=new SQLiteSavedItemRepository(context,db)) {
+                repository.add(item("failed","https://example.invalid/failed","Failed","Other"));
+                repository.add(item("legacy","https://example.invalid/legacy","Legacy","Other"));
+                repository.add(item("pending","https://example.invalid/pending","Pending","Other"));
+                repository.previewState("failed",SavedItem.PreviewState.FAILED,"Unavailable");
+                repository.previewState("pending",SavedItem.PreviewState.PENDING,"");
+                repository.finishPhotoDiscovery("pending");
+            }
+            // Reopening storage must not turn a terminal failure into another download batch.
+            try(SQLiteSavedItemRepository repository=new SQLiteSavedItemRepository(context,db)) {
+                assertTrue(repository.needsPhotoDiscovery("failed"));
+                assertFalse(repository.pendingItemIds().contains("failed"));
+                assertTrue(repository.pendingItemIds().containsAll(List.of("legacy","pending")));
+                repository.retryPhotos("failed");
+                assertTrue(repository.pendingItemIds().contains("failed"));
+            }
+        } finally { context.deleteDatabase(db); }
+    }
+
     @Test public void statusChangesPreserveContentAndDuplicateMatchingPreservesQueries() throws Exception {
         String db="tracking-"+UUID.randomUUID()+".db";
         try(SQLiteSavedItemRepository repository=new SQLiteSavedItemRepository(context,db)) {

@@ -38,6 +38,8 @@ public final class PostDetailActivity extends Activity {
     private EditText editTitle,editNotes,editTags,editPrice,editCurrency,editLocation,editProductType,editPeriod;
     private AutoCompleteTextView editFolder;
     private Bundle pendingEdit;
+    private boolean screenStarted;
+    private int reloadGeneration;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state); id=getIntent().getStringExtra("item_id");
@@ -62,14 +64,26 @@ public final class PostDetailActivity extends Activity {
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root); renderTabs(); body.addView(text("Opening saved post…",16,muted));
         updates=WorkManager.getInstance(this).getWorkInfosByTagLiveData("keepr-snapshot");
-        observer=infos->reload(); updates.observeForever(observer); reload();
+        observer=infos->reload();
+    }
+    @Override protected void onStart() {
+        super.onStart();
+        screenStarted=true;
+        if(updates!=null) updates.observeForever(observer);
+    }
+    @Override protected void onStop() {
+        screenStarted=false;
+        reloadGeneration++;
+        if(updates!=null) updates.removeObserver(observer);
+        super.onStop();
     }
     private void reload() {
-        if(isDestroyed()) return;
+        if(!screenStarted || isDestroyed()) return;
+        int generation=++reloadGeneration;
         database.execute(()->{
             try {
                 SavedItem loaded=repository.find(id); SQLiteSavedItemRepository.PhotoProgress state=repository.photoProgress(id);
-                runOnUiThread(()->{ if(isDestroyed()) return; if(loaded==null) { finish(); return; }
+                runOnUiThread(()->{ if(!screenStarted || isDestroyed() || generation!=reloadGeneration) return; if(loaded==null) { finish(); return; }
                     String selected=item!=null && photoIndex<item.media().size() ? item.media().get(photoIndex).id() : null;
                     item=loaded;
                     if(selected!=null) for(int i=0;i<item.media().size();i++) if(item.media().get(i).id().equals(selected)) photoIndex=i;
