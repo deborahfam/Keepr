@@ -64,10 +64,40 @@ public final class SettingsActivity extends Activity {
         updates.addView(UiStyles.text(this,"Download the APK from GitHub, then open it to install. Compatible updates keep your saved posts and photos.",13,UiStyles.MUTED));
 
         LinearLayout data=card(body); data.addView(UiStyles.text(this,"Your data",21,UiStyles.INK));
-        data.addView(UiStyles.text(this,"Posts and photos stay on this device. Keep a backup before changing phones or reinstalling.",14,UiStyles.MUTED));
+        data.addView(UiStyles.text(this,"Your collection is stored on this device. Preview downloads contact source websites; exports go to the destination you choose. Keep a backup before changing phones or reinstalling.",14,UiStyles.MUTED));
         Button backup=UiStyles.button(this,getString(R.string.backup_restore),false); addButton(data,backup); backup.setOnClickListener(v->startActivity(new Intent(this,BackupActivity.class)));
         Button trash=UiStyles.button(this,"Trash",false); addButton(data,trash); trash.setOnClickListener(v->startActivity(new Intent(this,TrashActivity.class)));
+        Button privacy=UiStyles.button(this,"Privacy policy",false); addButton(data,privacy);
+        privacy.setOnClickListener(v->showDocument("Keepr privacy policy",R.raw.privacy));
+        Button onlinePrivacy=UiStyles.button(this,"Privacy policy online",false); addButton(data,onlinePrivacy);
+        onlinePrivacy.setOnClickListener(v->openWeb("https://deborahfam.github.io/Keepr/"));
+
+        LinearLayout about=card(body); about.addView(UiStyles.text(this,"About Keepr",21,UiStyles.INK));
+        about.addView(UiStyles.text(this,"Made by deborahfam",16,UiStyles.INK));
+        about.addView(UiStyles.text(this,"© 2026 deborahfam. Licensed under the Apache License, Version 2.0. Saved content belongs to its respective owners.",14,UiStyles.MUTED));
+        Button creator=UiStyles.button(this,"Creator on GitHub  ↗",false); addButton(about,creator);
+        creator.setOnClickListener(v->openWeb("https://github.com/deborahfam"));
+        Button source=UiStyles.button(this,"Source code  ↗",false); addButton(about,source);
+        source.setOnClickListener(v->openWeb("https://github.com/deborahfam/Keepr"));
+        Button license=UiStyles.button(this,"Apache 2.0 license",false); addButton(about,license);
+        license.setOnClickListener(v->showDocument("Apache License 2.0",R.raw.license));
+        Button notices=UiStyles.button(this,"Open-source notices",false); addButton(about,notices);
+        notices.setOnClickListener(v->showDocument("Open-source notices",R.raw.third_party_notices));
         setContentView(root); render();
+    }
+
+    private void showDocument(String title,int resource) {
+        try(java.io.InputStream input=getResources().openRawResource(resource)) {
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();
+            byte[] buffer=new byte[4096]; int count;
+            while((count=input.read(buffer))!=-1) bytes.write(buffer,0,count);
+            String text=new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
+            TextView content=UiStyles.text(this,text,15,UiStyles.INK); content.setTextIsSelectable(true);
+            content.setPadding(dp(20),dp(16),dp(20),dp(16));
+            ScrollView scroll=new ScrollView(this); scroll.addView(content);
+            new android.app.AlertDialog.Builder(this).setTitle(title).setView(scroll)
+                    .setPositiveButton(android.R.string.ok,null).show();
+        } catch(java.io.IOException error) { Toast.makeText(this,"Could not open this document.",Toast.LENGTH_LONG).show(); }
     }
 
     private void checkForUpdates() {

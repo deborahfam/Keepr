@@ -10,3 +10,19 @@ local.properties
 
 __pycache__/
 *.pyc
+
+# Local credentials and user exports
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.pem
+*.key
+*.keepr
+Keepr-*.zip
+*.db
+*.db-shm
+*.db-wal
+.local/
+*.keeprbackup

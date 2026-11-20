@@ -1,0 +1,17 @@
+Keepr — Google Play submission facts (not a submitted declaration)
+
+Distribution prepared in this repository: GitHub APK releases. A Play Console account/app was not selected or accessed.
+
+Privacy policy URL: https://deborahfam.github.io/Keepr/
+App/developer identity: Keepr / deborahfam
+Accounts: none; no account creation or account deletion flow required by this implementation.
+Ads, analytics, crash-reporting SDKs, developer backend: none configured.
+Device permissions: Internet and AndroidX WorkManager scheduling/network permissions. No address-book, GPS, camera, microphone or broad storage access requested by Keepr.
+Local data: links, original shared text, captions, photos, parsed contact/location fields, notes, tags, categories and preferences.
+Outbound network: requested source URLs and query parameters, IP address and headers to arbitrary websites/image hosts for previews; GitHub receives update-check request metadata. These are direct requests, not a developer-operated collection endpoint.
+Transfers: user-selected backup storage providers and share recipients. New backups encrypted; shared posts and older backups not encrypted. Sharing excludes optional notes/contact fields/captions by default but text and photos can themselves contain personal information.
+Retention: user-selected Trash retention; manual permanent deletion; uninstall/clear storage removes local data. External copies require separate deletion.
+Encryption in transit: in-app cleartext HTTP blocked. Opening source links in a browser is governed by the external app.
+Security reporting: GitHub private vulnerability reports enabled.
+
+Before submitting: select the actual Play listing entity/contact; complete the current Data safety questionnaire truthfully for direct website requests and user-initiated transfers using Google’s current guidance. Do not select a blanket “no data transmitted” answer. No form answers have been submitted on the owner’s behalf. Configure Play App Signing and an upload key; do not upload the legacy development key as a new production identity.

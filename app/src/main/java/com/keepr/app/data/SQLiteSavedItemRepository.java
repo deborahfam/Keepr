@@ -82,7 +82,10 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     public void observeChanges(Runnable observer) { changeObserver=observer; }
     private void migrateLegacy(SQLiteDatabase db) throws JSONException {
         android.content.SharedPreferences prefs = context.getSharedPreferences("keepr", Context.MODE_PRIVATE);
-        if (prefs.getBoolean("sqlite_migrated", false)) return;
+        if (prefs.getBoolean("sqlite_migrated", false)) {
+            if(prefs.contains("links") && !prefs.edit().remove("links").commit()) throw new IllegalStateException("Could not remove migrated recovery data");
+            return;
+        }
         JSONArray array = new JSONArray(prefs.getString("links", "[]"));
         db.beginTransaction();
         try {
@@ -98,8 +101,8 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
             }
             db.setTransactionSuccessful();
         } finally { db.endTransaction(); }
-        // Retain original JSON as a recovery copy; inserts are idempotent after process death.
-        if (!prefs.edit().putBoolean("sqlite_migrated", true).commit()) throw new IllegalStateException("Could not record legacy migration");
+        // Drop legacy private content only after the SQLite transaction has committed.
+        if (!prefs.edit().putBoolean("sqlite_migrated", true).remove("links").commit()) throw new IllegalStateException("Could not record legacy migration");
     }
     @Override public void add(SavedItem item) {
         SQLiteDatabase db = helper.getWritableDatabase();

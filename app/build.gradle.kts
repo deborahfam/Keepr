@@ -8,7 +8,12 @@ android {
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = providers.gradleProperty("keeprVersionCode").orElse("7").get().toInt()
-        versionName = providers.gradleProperty("keeprVersionName").orElse("0.7.0").get()
+        versionName = providers.gradleProperty("keeprVersionName").orElse("0.8.0").get()
+    }
+    buildTypes {
+        getByName("release") {
+            isDebuggable = false
+        }
     }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -28,4 +33,17 @@ dependencies {
     testImplementation("org.json:json:20240303")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+}
+
+// Machine-readable inventory used for advisory checks and shipped license notices.
+tasks.register("releaseInventory") {
+    doLast {
+        val files = (configurations.getByName("releaseRuntimeClasspath").resolvedConfiguration.resolvedArtifacts +
+            configurations.getByName("coreLibraryDesugaring").resolvedConfiguration.resolvedArtifacts)
+        val output = layout.buildDirectory.file("release-inventory.tsv").get().asFile
+        output.parentFile.mkdirs()
+        output.writeText(files.sortedBy { it.moduleVersion.id.toString() }.joinToString("\n") {
+            "${it.moduleVersion.id}\t${it.file.absolutePath}"
+        } + "\n")
+    }
 }

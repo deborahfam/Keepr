@@ -47,6 +47,20 @@ public class VaultBackupTest {
             from.delete(id); to.delete(id);
         } finally { context.deleteDatabase(source); context.deleteDatabase(target); }
     }
+    @Test public void encryptedBackupRestoresTheSameCollection() throws Exception {
+        String source="encrypted-source-"+UUID.randomUUID()+".db",target="encrypted-target-"+UUID.randomUUID()+".db",id=UUID.randomUUID().toString();
+        char[] password="device-test-only password".toCharArray();
+        try(SQLiteSavedItemRepository from=new SQLiteSavedItemRepository(context,source); SQLiteSavedItemRepository to=new SQLiteSavedItemRepository(context,target)) {
+            from.add(item(id)); from.attach(photo(id));
+            ByteArrayOutputStream encrypted=new ByteArrayOutputStream(); VaultBackup backup=new VaultBackup(context);
+            try(OutputStream output=BackupEncryption.encrypt(encrypted,password)) { backup.exportTo(from,output); }
+            ByteArrayOutputStream authenticated=new ByteArrayOutputStream();
+            BackupEncryption.decrypt(new ByteArrayInputStream(encrypted.toByteArray()),authenticated,password);
+            assertEquals(1,backup.restoreFrom(to,new ByteArrayInputStream(authenticated.toByteArray())).added());
+            assertEquals("Notes",to.find(id).notes()); assertEquals(1,to.find(id).media().size());
+            from.delete(id); to.delete(id);
+        } finally { java.util.Arrays.fill(password,'\0'); context.deleteDatabase(source); context.deleteDatabase(target); }
+    }
     @Test public void missingPhotoAndTraversalRejectEntireRestore() throws Exception {
         String source="source-"+UUID.randomUUID()+".db",target="target-"+UUID.randomUUID()+".db",id=UUID.randomUUID().toString();
         try(SQLiteSavedItemRepository from=new SQLiteSavedItemRepository(context,source); SQLiteSavedItemRepository to=new SQLiteSavedItemRepository(context,target)) {

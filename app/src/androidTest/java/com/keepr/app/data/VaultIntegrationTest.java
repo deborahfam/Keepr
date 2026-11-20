@@ -144,10 +144,10 @@ public class VaultIntegrationTest {
                 old.execSQL("INSERT INTO SavedItem VALUES('existing','Keep me')"); old.setVersion(1);
             }
             try (VaultDatabase helper=new VaultDatabase(context,name)) {
-                try (android.database.Cursor cursor=helper.getReadableDatabase().rawQuery("SELECT title,shared_text,title_edited FROM SavedItem WHERE id='existing'",null)) {
-                    assertTrue(cursor.moveToFirst()); assertEquals("Keep me",cursor.getString(0)); assertEquals("",cursor.getString(1)); assertEquals(0,cursor.getInt(2));
+                try (android.database.Cursor cursor=helper.getReadableDatabase().rawQuery("SELECT title,shared_text,title_edited,contact_email,location_version FROM SavedItem WHERE id='existing'",null)) {
+                    assertTrue(cursor.moveToFirst()); assertEquals("Keep me",cursor.getString(0)); assertEquals("",cursor.getString(1)); assertEquals(0,cursor.getInt(2)); assertEquals("",cursor.getString(3)); assertEquals(0,cursor.getInt(4));
                 }
-                assertEquals(6,helper.getReadableDatabase().getVersion());
+                assertEquals(8,helper.getReadableDatabase().getVersion());
             }
         } finally { context.deleteDatabase(name); }
     }

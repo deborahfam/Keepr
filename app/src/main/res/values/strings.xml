@@ -29,7 +29,7 @@
     <string name="export_backup">Export backup</string>
     <string name="restore_backup">Restore backup</string>
     <string name="choose_backup">Choose backup</string>
-    <string name="backup_explanation">Save your posts, categories, tags, and offline photos in a ZIP file. Keep a copy outside this device to protect against device loss. Backups are not encrypted; store them somewhere you trust. Keep Keepr open until the operation finishes.</string>
+    <string name="backup_explanation">Save your posts, categories, tags, and offline photos in a password-encrypted backup. Keep the password safe: it cannot be recovered. Store a copy outside this device. Older unencrypted ZIP backups can still be restored. Keep Keepr open until the operation finishes.</string>
     <string name="restore_explanation">Missing posts will be added. Posts already in your collection will stay unchanged, including edits made since the backup.</string>
     <string name="edit_post">Edit saved post</string>
     <string name="edit_title">Title</string>
