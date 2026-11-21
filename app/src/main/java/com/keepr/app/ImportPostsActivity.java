@@ -79,7 +79,10 @@ public final class ImportPostsActivity extends Activity {
         header.getChildAt(0).setEnabled(!job.busy); body.addView(header);
         if(!job.message.isEmpty()) { TextView message=UiStyles.text(this,job.message,15,UiStyles.INK); message.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE); body.addView(message); }
         if(job.busy) { body.addView(UiStyles.text(this,getString(R.string.share_working),15,UiStyles.MUTED)); return; }
-        if(job.done) return;
+        if(job.done) {
+            button(getString(R.string.share_open_collection),()->{ startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)); finish(); },true);
+            return;
+        }
         if(job.preview==null) { body.addView(UiStyles.text(this,getString(R.string.share_import_help),15,UiStyles.MUTED)); button(getString(R.string.share_choose_file),this::choose,true); return; }
         body.addView(UiStyles.text(this,getString(R.string.share_import_explanation),15,UiStyles.MUTED));
         for(PostShare.Post post:job.preview.posts()) {
