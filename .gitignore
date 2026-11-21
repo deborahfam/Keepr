@@ -26,3 +26,6 @@ Keepr-*.zip
 *.db-wal
 .local/
 *.keeprbackup
+
+# Pencil embeds session metadata; keep editable files local.
+design/*.pen
