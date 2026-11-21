@@ -29,9 +29,7 @@ public final class BackupActivity extends Activity {
         LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); int pad=(int)(18*getResources().getDisplayMetrics().density); root.setPadding(pad,pad,pad,pad);
         root.setOnApplyWindowInsetsListener((view,insets)->{ view.setPadding(pad+insets.getSystemWindowInsetLeft(),pad+insets.getSystemWindowInsetTop(),pad+insets.getSystemWindowInsetRight(),pad+insets.getSystemWindowInsetBottom()); return insets; });
         root.setBackgroundColor(UiStyles.PAPER);
-        Button back=UiStyles.button(this,"‹  Back to collection",false); back.setOnClickListener(v->finish()); root.addView(back);
-        TextView heading=UiStyles.text(this,"Protect your collection",28,UiStyles.INK);
-        heading.setPadding(0,pad,0,UiStyles.dp(this,8)); root.addView(heading);
+        root.addView(UiStyles.header(this,getString(R.string.backup_restore),this::finish));
         TextView explanation=UiStyles.text(this,getString(R.string.backup_explanation),15,UiStyles.MUTED); root.addView(explanation);
         LinearLayout panel=new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL); panel.setPadding(pad,pad,pad,pad);
         panel.setBackground(UiStyles.surface(this,UiStyles.SURFACE,14,UiStyles.LINE));
@@ -52,15 +50,15 @@ public final class BackupActivity extends Activity {
     private void password(boolean exporting,Runnable next) {
         LinearLayout fields=new LinearLayout(this); fields.setOrientation(LinearLayout.VERTICAL); int pad=UiStyles.dp(this,18); fields.setPadding(pad,pad,pad,pad);
         TextView help=UiStyles.text(this,exporting?"Use at least 12 characters. Keep this password safely: it cannot be recovered.":"Enter the backup password. For an older unencrypted ZIP backup, leave this blank.",15,UiStyles.INK); fields.addView(help);
-        EditText first=new EditText(this); first.setHint("Backup password"); first.setInputType(129); first.setSaveEnabled(false); first.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO); fields.addView(first);
-        EditText confirm=new EditText(this); confirm.setHint("Confirm password"); confirm.setInputType(129); confirm.setSaveEnabled(false); confirm.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO); if(exporting) fields.addView(confirm);
+        EditText first=new EditText(this); UiStyles.field(first); first.setHint("Backup password"); first.setInputType(129); first.setSaveEnabled(false); first.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO); fields.addView(first);
+        EditText confirm=new EditText(this); UiStyles.field(confirm); confirm.setHint("Confirm password"); confirm.setInputType(129); confirm.setSaveEnabled(false); confirm.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO); if(exporting) fields.addView(confirm);
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle(exporting?"Encrypt backup":"Restore backup").setView(fields).setNegativeButton(android.R.string.cancel,null).setPositiveButton("Continue",null).create();
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             String value=first.getText().toString();
             if(exporting && (value.length()<12 || !value.equals(confirm.getText().toString()))) { first.setError("Use 12 or more characters and matching passwords."); return; }
             job.clearPassword(); job.password=value.toCharArray(); first.setText(""); confirm.setText(""); dialog.dismiss(); next.run();
         }));
-        dialog.show(); dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+        dialog.show(); UiStyles.styleEditor(dialog); dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
     }
     private void pick(Intent intent,int request) { try { startActivityForResult(intent,request); } catch(ActivityNotFoundException error) { job.clearPassword(); job.message="No document picker is available on this device."; render(); } }
     private void render() { export.setEnabled(!job.busy); restore.setEnabled(!job.busy); status.setText(job.message); }

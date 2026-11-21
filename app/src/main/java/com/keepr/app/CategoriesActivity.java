@@ -40,9 +40,7 @@ public final class CategoriesActivity extends Activity {
     private void render() {
         if(dialog!=null) { dialog.dismiss(); dialog=null; }
         body.removeAllViews();
-        LinearLayout toolbar=new LinearLayout(this); toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        Button back=UiStyles.button(this,"‹",false); back.setTextSize(26); back.setContentDescription(getString(R.string.categories_back)); back.setOnClickListener(v->finish()); toolbar.addView(back,new LinearLayout.LayoutParams(UiStyles.dp(this,48),UiStyles.dp(this,48)));
-        TextView screenTitle=UiStyles.text(this,getString(R.string.categories_title),25,UiStyles.INK); LinearLayout.LayoutParams headingParams=new LinearLayout.LayoutParams(0,-2,1); headingParams.leftMargin=UiStyles.dp(this,14); toolbar.addView(screenTitle,headingParams); body.addView(toolbar);
+        body.addView(UiStyles.header(this,getString(R.string.categories_title),this::finish));
         body.addView(UiStyles.text(this,getString(R.string.categories_description),15,UiStyles.MUTED));
         Button add=UiStyles.button(this,getString(R.string.category_add),true); add.setId(R.id.category_add); add.setEnabled(!job.busy); add.setOnClickListener(v->{ job.editing=true; job.editId=null; job.draft=""; job.message=""; edit(); }); body.addView(add,spacing());
         if(job.busy || !job.message.isEmpty()) { TextView status=UiStyles.text(this,job.busy?getString(R.string.categories_loading):job.message,14,UiStyles.MUTED); status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE); body.addView(status); }
@@ -65,7 +63,7 @@ public final class CategoriesActivity extends Activity {
     private LinearLayout form() { LinearLayout form=column(); int pad=UiStyles.dp(this,18); form.setPadding(pad,pad,pad,pad); return form; }
     private void edit() {
         LinearLayout form=form(); form.addView(UiStyles.text(this,getString(R.string.category_name),14,UiStyles.MUTED));
-        EditText name=new EditText(this); name.setId(R.id.category_name); name.setSingleLine(true); name.setText(job.draft); name.setSelectAllOnFocus(true); name.setContentDescription(getString(R.string.category_name)); form.addView(name);
+        EditText name=new EditText(this); UiStyles.field(name); name.setId(R.id.category_name); name.setSingleLine(true); name.setText(job.draft); name.setSelectAllOnFocus(true); name.setContentDescription(getString(R.string.category_name)); form.addView(name);
         form.addView(UiStyles.text(this,getString(R.string.category_name_help),13,UiStyles.MUTED));
         name.addTextChangedListener(new TextWatcher(){ public void beforeTextChanged(CharSequence s,int start,int count,int after) {} public void onTextChanged(CharSequence s,int start,int before,int count) { job.draft=s.toString(); } public void afterTextChanged(Editable value) {} });
         dialog=new AlertDialog.Builder(this).setTitle(job.editId==null?R.string.category_add:R.string.category_rename).setView(form).setNegativeButton(android.R.string.cancel,(d,w)->job.editing=false).setPositiveButton(R.string.save_changes,null).create();

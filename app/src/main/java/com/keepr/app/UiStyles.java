@@ -36,6 +36,27 @@ final class UiStyles {
         button.setMinHeight(dp(context, 48)); button.setMinimumHeight(dp(context, 48));
         button.setStateListAnimator(null); return button;
     }
+    static android.widget.LinearLayout header(android.app.Activity activity, String title, Runnable backAction) {
+        android.widget.LinearLayout row=new android.widget.LinearLayout(activity);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        android.widget.ImageButton back=new android.widget.ImageButton(activity);
+        back.setImageResource(R.drawable.ic_back); back.setContentDescription(activity.getString(R.string.back_to_collection));
+        back.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33FFFFFF),surface(activity,SURFACE,14,LINE),null));
+        back.setPadding(dp(activity,12),dp(activity,12),dp(activity,12),dp(activity,12));
+        back.setOnClickListener(v->backAction.run());
+        row.addView(back,new android.widget.LinearLayout.LayoutParams(dp(activity,48),dp(activity,48)));
+        TextView heading=text(activity,title,26,INK); heading.setPadding(0,0,0,0);
+        android.widget.LinearLayout.LayoutParams label=new android.widget.LinearLayout.LayoutParams(0,-2,1); label.leftMargin=dp(activity,14);
+        row.addView(heading,label); return row;
+    }
+    static void field(android.widget.EditText field) {
+        Context context=field.getContext();
+        field.setTextSize(14); field.setTextColor(INK); field.setHintTextColor(MUTED);
+        field.setTypeface(context.getResources().getFont(R.font.inter));
+        field.setBackground(surface(context,SURFACE,14,LINE));
+        field.setPadding(dp(context,14),dp(context,12),dp(context,14),dp(context,12));
+        field.setMinimumHeight(dp(context,48));
+    }
     static void styleEditor(android.app.AlertDialog dialog) {
         android.view.Window window=dialog.getWindow();
         if(window!=null) {
@@ -45,6 +66,7 @@ final class UiStyles {
             window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
         Button save=dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE);
+        if(save==null) return;
         save.setTextColor(0xffffffff); save.setBackground(surface(dialog.getContext(),ACCENT,14,0));
         save.setPadding(dp(dialog.getContext(),24),dp(dialog.getContext(),10),dp(dialog.getContext(),24),dp(dialog.getContext(),10));
     }

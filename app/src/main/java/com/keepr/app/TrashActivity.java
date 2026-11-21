@@ -23,7 +23,7 @@ public final class TrashActivity extends Activity {
         worker.execute(()->{
             try { repository.purgeExpired(); var posts=repository.trashContents(); int days=repository.retentionDays();
                 runOnUiThread(()->{ if(isDestroyed()) return; body.removeAllViews(); destination=body;
-                    addButton("‹  Back to collection",this::finish); text("Trash",26);
+                    body.addView(UiStyles.header(this,"Trash",this::finish));
                     text("A second chance for your finds. Restore posts with their photos before they expire.",16);
                     addButton("Keep future deletions for "+days+" days",()->new AlertDialog.Builder(this).setTitle("Trash retention")
                         .setItems(new String[]{"7 days","30 days","90 days"},(d,index)->perform(()->repository.setRetentionDays(new int[]{7,30,90}[index]))).show());

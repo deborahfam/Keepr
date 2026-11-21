@@ -41,10 +41,8 @@ public final class SettingsActivity extends Activity {
         root.setOnApplyWindowInsetsListener((view,insets)->{
             view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom()); return insets;
         });
-        LinearLayout toolbar=new LinearLayout(this); toolbar.setGravity(android.view.Gravity.CENTER_VERTICAL); toolbar.setPadding(dp(18),dp(8),dp(18),dp(8));
-        Button back=UiStyles.button(this,"‹",false); back.setTextSize(26); back.setContentDescription("Back to collection"); back.setOnClickListener(v->finish());
-        toolbar.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        TextView heading=UiStyles.text(this,"Settings",26,UiStyles.INK); heading.setPadding(dp(14),0,0,0); toolbar.addView(heading); root.addView(toolbar);
+        LinearLayout toolbar=UiStyles.header(this,"Settings",this::finish);
+        toolbar.setPadding(dp(18),dp(8),dp(18),dp(8)); root.addView(toolbar);
         ScrollView scroll=new ScrollView(this); LinearLayout body=column(); body.setPadding(dp(18),dp(12),dp(18),dp(24)); scroll.addView(body);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
 

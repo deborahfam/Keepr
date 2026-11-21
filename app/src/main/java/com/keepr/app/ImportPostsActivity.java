@@ -71,10 +71,12 @@ public final class ImportPostsActivity extends Activity {
         });
     }
     private void render() {
-        body.removeAllViews(); button(getString(job.done?R.string.share_open_collection:R.string.share_cancel),()->{
+        body.removeAllViews();
+        var header=UiStyles.header(this,getString(R.string.share_import_title),()->{
+            if(job.busy) return;
             if(job.done) startActivity(new Intent(this,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)); finish();
-        },!job.busy);
-        body.addView(UiStyles.text(this,getString(R.string.share_import_title),25,UiStyles.INK));
+        });
+        header.getChildAt(0).setEnabled(!job.busy); body.addView(header);
         if(!job.message.isEmpty()) { TextView message=UiStyles.text(this,job.message,15,UiStyles.INK); message.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE); body.addView(message); }
         if(job.busy) { body.addView(UiStyles.text(this,getString(R.string.share_working),15,UiStyles.MUTED)); return; }
         if(job.done) return;

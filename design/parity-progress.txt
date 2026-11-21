@@ -37,3 +37,14 @@ Verificación realizada:
 - Captura inicial de colección vacía en emulador.
 
 No publicar como paridad visual terminada.
+
+Continuación:
+- Cabecera común con icono vectorial y objetivo táctil de 48 dp en
+  categorías, copias, papelera, compartir, importar y ajustes.
+- Campos de categoría y contraseña con superficie/borde compartidos.
+- Captura optativa reproducible: VisualScreensTest, argumento visualScreens=true.
+- Capturas de seis pantallas realizadas en emulador; vistas iniciales
+  únicamente, no certifican estados con contenido ni paridad completa.
+- Build, lint y pruebas JVM pasaron tras estos cambios.
+- Bloqueo actual del diseño: MCP no tiene documento abierto; CLI 0.3.2
+  rechaza formato 2.25. Se intenta instalar CLI 0.3.17 en /tmp.

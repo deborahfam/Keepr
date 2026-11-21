@@ -51,8 +51,7 @@ public final class SharePostsActivity extends Activity {
     }
     private PostShare.Options options() { return new PostShare.Options(job.notes,job.contacts,job.caption); }
     private void render() {
-        body.removeAllViews(); addButton(getString(R.string.share_back),false,()->finish(),true);
-        body.addView(UiStyles.text(this,getString(R.string.share_posts),25,UiStyles.INK));
+        body.removeAllViews(); body.addView(UiStyles.header(this,getString(R.string.share_posts),this::finish));
         if(!job.message.isEmpty()) { TextView status=UiStyles.text(this,job.message,15,UiStyles.MUTED); status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE); body.addView(status); }
         if(job.items.isEmpty()) { if(job.busy) body.addView(UiStyles.text(this,getString(R.string.share_loading),15,UiStyles.MUTED)); return; }
         body.addView(UiStyles.text(this,getString(R.string.share_explanation),14,UiStyles.MUTED));
