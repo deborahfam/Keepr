@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 import okhttp3.*;
 import org.json.*;
 
-/** Reads public release metadata only; downloads and installation stay with Android's browser. */
+/** Reads public release metadata for the in-app updater. */
 public final class AppUpdates {
     public static final String RELEASES = "https://github.com/deborahfam/Keepr/releases";
     private static final String API = "https://api.github.com/repos/deborahfam/Keepr/releases/latest";

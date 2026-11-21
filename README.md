@@ -170,3 +170,7 @@ Known publication decisions still requiring owner action:
 Backups are encrypted starting with 0.8; older ZIPs and deliberately shared post files remain unencrypted and are disclosed accordingly. Store screenshots must use synthetic data. Existing design exports use illustrative content and are not screenshots of the current app.
 
 References: [Android signing](https://developer.android.com/studio/publish/app-signing), [Android debuggable guidance](https://developer.android.com/privacy-and-security/risks/android-debuggable), [Play user data requirements](https://support.google.com/googleplay/android-developer/answer/10144311), [Play Data safety](https://support.google.com/googleplay/android-developer/answer/10787469).
+
+## In-app updates
+
+Settings downloads the official GitHub APK into private cache, displays progress, and verifies its published SHA-256 checksum before offering **Install update**. Android asks for permission to install updates from Keepr and displays the installation confirmation. No browser is needed for this flow. Downloads survive screen rotation; after process termination, check and download again. Android may stop Keepr while replacing the installed package.

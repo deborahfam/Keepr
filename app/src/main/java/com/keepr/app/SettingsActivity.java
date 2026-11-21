@@ -21,7 +21,9 @@ public final class SettingsActivity extends Activity {
     private CheckJob job;
 
     private static final class CheckJob {
-        volatile boolean checking;
+        volatile boolean checking,downloading;
+        volatile int percent;
+        volatile java.io.File apk;
         volatile String message="";
         volatile AppUpdates.Release release;
         volatile long checkedAt;
@@ -61,21 +63,26 @@ public final class SettingsActivity extends Activity {
         checked=UiStyles.text(this,"",12,UiStyles.MUTED); updates.addView(checked);
         check=UiStyles.button(this,"Check for updates",true); check.setId(R.id.check_updates); addButton(updates,check); check.setOnClickListener(v->checkForUpdates());
         download=UiStyles.button(this,"Download update",true); download.setId(R.id.download_update); addButton(updates,download);
-        download.setOnClickListener(v->{ AppUpdates.Release release=job.release; if(release!=null && !job.checking && !release.downloadUrl().isEmpty()) openWeb(release.downloadUrl()); });
+        download.setOnClickListener(v->{ AppUpdates.Release release=job.release; if(release!=null && !job.checking && !release.downloadUrl().isEmpty()) downloadUpdate(release); });
         Button releases=UiStyles.button(this,"View GitHub releases  ↗",false); addButton(updates,releases);
         releases.setOnClickListener(v->openWeb(job.release==null?AppUpdates.RELEASES:job.release.pageUrl()));
-        updates.addView(UiStyles.text(this,"Download the APK from GitHub, then open it to install. Compatible updates keep your saved posts and photos.",13,UiStyles.MUTED));
+        updates.addView(UiStyles.text(this,"Download here, then confirm installation with Android. Your saved posts and photos are kept.",13,UiStyles.MUTED));
 
         body.addView(UiStyles.text(this,"DATA AND SECURITY",10,0xff706A6D));
         LinearLayout data=card(body); data.setPadding(dp(8),dp(6),dp(8),dp(6));
         data.addView(UiStyles.menuRow(this,"Backup and restore","Password-encrypted copies",R.drawable.ic_backup,false,()->startActivity(new Intent(this,BackupActivity.class))));
         data.addView(UiStyles.menuRow(this,"Trash","Restore deleted posts before expiry",R.drawable.ic_trash,false,()->startActivity(new Intent(this,TrashActivity.class))));
-        Button privacy=UiStyles.button(this,"Privacy policy",false); addButton(data,privacy);
-        privacy.setOnClickListener(v->showDocument("Keepr privacy policy",R.raw.privacy));
-        Button onlinePrivacy=UiStyles.button(this,"Privacy policy online",false); addButton(data,onlinePrivacy);
-        onlinePrivacy.setOnClickListener(v->openWeb("https://deborahfam.github.io/Keepr/"));
-
-        LinearLayout about=card(body); about.addView(UiStyles.text(this,"About Keepr",21,UiStyles.INK));
+        LinearLayout summaries=new LinearLayout(this); body.addView(summaries);
+        LinearLayout storage=column(); storage.setPadding(dp(15),dp(15),dp(15),dp(15)); storage.setBackground(UiStyles.surface(this,UiStyles.SURFACE,15,UiStyles.LINE));
+        TextView storageSize=UiStyles.text(this,"…",20,UiStyles.INK); storage.addView(storageSize); storage.addView(UiStyles.text(this,"Offline photos",11,UiStyles.MUTED));
+        LinearLayout.LayoutParams summaryParams=new LinearLayout.LayoutParams(0,-2,1); summaryParams.rightMargin=dp(10); summaries.addView(storage,summaryParams);
+        LinearLayout local=column(); local.setPadding(dp(15),dp(15),dp(15),dp(15)); local.setBackground(UiStyles.surface(this,UiStyles.SURFACE,15,UiStyles.LINE));
+        local.addView(UiStyles.text(this,"100% local",20,UiStyles.INK)); local.addView(UiStyles.text(this,"No account or cloud",11,UiStyles.MUTED)); summaries.addView(local,new LinearLayout.LayoutParams(0,-2,1));
+        var sizeWorker=Executors.newSingleThreadExecutor(); sizeWorker.execute(()->{ long bytes=0; java.io.File[] photos=new java.io.File(getFilesDir(),"media").listFiles(); if(photos!=null) for(java.io.File photo:photos) if(photo.isFile()) bytes+=photo.length(); final long total=bytes; runOnUiThread(()->{if(!isDestroyed()) storageSize.setText(android.text.format.Formatter.formatShortFileSize(this,total));}); sizeWorker.shutdown(); });
+        LinearLayout about=column(); about.setPadding(dp(18),dp(18),dp(18),dp(18));
+        Button aboutButton=UiStyles.button(this,"About Keepr",false); addButton(body,aboutButton);
+        aboutButton.setOnClickListener(v->{ if(about.getParent()!=null) ((android.view.ViewGroup)about.getParent()).removeView(about); ScrollView aboutScroll=new ScrollView(this); aboutScroll.addView(about); new android.app.AlertDialog.Builder(this).setTitle("About Keepr").setView(aboutScroll).setPositiveButton(android.R.string.ok,null).show(); });
+ about.addView(UiStyles.text(this,"About Keepr",21,UiStyles.INK));
         about.addView(UiStyles.text(this,"Made by deborahfam",16,UiStyles.INK));
         about.addView(UiStyles.text(this,"© 2026 deborahfam. Licensed under the Apache License, Version 2.0. Saved content belongs to its respective owners.",14,UiStyles.MUTED));
         Button creator=UiStyles.button(this,"Creator on GitHub  ↗",false); addButton(about,creator);
@@ -86,6 +93,11 @@ public final class SettingsActivity extends Activity {
         license.setOnClickListener(v->showDocument("Apache License 2.0",R.raw.license));
         Button notices=UiStyles.button(this,"Open-source notices",false); addButton(about,notices);
         notices.setOnClickListener(v->showDocument("Open-source notices",R.raw.third_party_notices));
+        Button privacy=UiStyles.button(this,"Privacy policy",false); addButton(about,privacy);
+        privacy.setOnClickListener(v->showDocument("Keepr privacy policy",R.raw.privacy));
+        Button onlinePrivacy=UiStyles.button(this,"Privacy policy online",false); addButton(about,onlinePrivacy);
+        onlinePrivacy.setOnClickListener(v->openWeb("https://deborahfam.github.io/Keepr/"));
+
         setContentView(root); render();
     }
 
@@ -104,7 +116,7 @@ public final class SettingsActivity extends Activity {
     }
 
     private void checkForUpdates() {
-        if(job.checking) return;
+        if(job.checking || job.downloading) return;
         job.checking=true; job.release=null; job.message="Checking GitHub…"; render();
         CheckJob running=job; String installed=installedVersion;
         var worker=Executors.newSingleThreadExecutor();
@@ -121,7 +133,7 @@ public final class SettingsActivity extends Activity {
         });
     }
     private void render() {
-        status.setText(job.message); status.setVisibility(job.message.isEmpty()?View.GONE:View.VISIBLE); check.setEnabled(!job.checking); check.setText(job.checking?"Checking…":"Check for updates");
+        status.setText(job.message); status.setVisibility(job.message.isEmpty()?View.GONE:View.VISIBLE); check.setEnabled(!job.checking && !job.downloading); check.setText(job.checking?"Checking…":"Check for updates");
         progress.setVisibility(job.checking?View.VISIBLE:View.GONE);
         AppUpdates.Release release=job.release;
         latest.setVisibility(release==null?View.GONE:View.VISIBLE);
@@ -130,8 +142,35 @@ public final class SettingsActivity extends Activity {
         if(job.checkedAt!=0) checked.setText("Last successful check · "+DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(new Date(job.checkedAt)));
         boolean available=false;
         if(release!=null && !job.checking) try { available=AppUpdates.compareVersions(release.version(),installedVersion)>0 && !release.downloadUrl().isEmpty(); } catch(IllegalArgumentException ignored) { }
-        download.setVisibility(available?View.VISIBLE:View.GONE);
-        if(available) download.setText("Download "+release.version()+" · "+android.text.format.Formatter.formatShortFileSize(this,release.bytes()));
+        download.setVisibility(available || job.downloading || job.apk!=null?View.VISIBLE:View.GONE);
+        download.setEnabled(!job.downloading);
+        if(job.downloading) { download.setText("Downloading · "+job.percent+"%"); progress.setVisibility(View.VISIBLE); progress.setIndeterminate(false); progress.setProgress(job.percent); }
+        else progress.setIndeterminate(true);
+        if(job.apk!=null && !job.downloading) { download.setText("Install update"); download.setOnClickListener(v->installUpdate()); }
+        else if(available && !job.downloading) { download.setOnClickListener(v->downloadUpdate(job.release)); download.setText("Download "+release.version()+" · "+android.text.format.Formatter.formatShortFileSize(this,release.bytes())); }
+    }
+    private void downloadUpdate(AppUpdates.Release release) {
+        if(job.downloading) return;
+        if(job.apk!=null && job.apk.isFile()) { installUpdate(); return; }
+        CheckJob running=job; running.downloading=true; running.percent=0; render();
+        java.io.File directory=new java.io.File(getCacheDir(),"updates");
+        var worker=Executors.newSingleThreadExecutor(); worker.execute(()->{
+            try { running.apk=com.keepr.app.data.UpdateDownload.fetch(release,directory,(read,total)->{ int percent=(int)(read*100/total); if(percent!=running.percent) { running.percent=percent; running.refresh(); } }); running.message="Update downloaded and verified. Tap Install update."; }
+            catch(Exception error) { running.apk=null; running.message="Download failed or could not be verified. Tap Download to retry."; }
+            finally { running.downloading=false; running.refresh(); worker.shutdown(); }
+        });
+    }
+    private void installUpdate() {
+        try {
+            if(!getPackageManager().canRequestPackageInstalls()) {
+                startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+getPackageName())));
+                Toast.makeText(this,"Allow updates from Keepr, then tap Install update again.",Toast.LENGTH_LONG).show(); return;
+            }
+            android.content.pm.PackageInfo candidate=getPackageManager().getPackageArchiveInfo(job.apk.getPath(),0);
+            if(candidate==null || !getPackageName().equals(candidate.packageName) || AppUpdates.compareVersions(candidate.versionName,installedVersion)<=0) throw new IllegalArgumentException();
+            Uri uri=androidx.core.content.FileProvider.getUriForFile(this,getPackageName()+".updates",job.apk);
+            startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+        } catch(Exception error) { job.apk=null; job.message="Could not install this update. Download again or check Android installation settings."; render(); }
     }
     private void openWeb(String url) {
         try { startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url))); }
