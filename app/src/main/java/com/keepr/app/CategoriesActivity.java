@@ -31,7 +31,7 @@ public final class CategoriesActivity extends Activity {
             if(state!=null) { job.editing=state.getBoolean("editing"); job.editId=state.getString("edit_id"); job.draft=state.getString("draft",""); job.removeId=state.getString("remove_id"); job.destinationId=state.getString("destination_id"); }
         }
         job.screen=this;
-        body=new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); body.setBackgroundColor(UiStyles.PAPER); int pad=UiStyles.dp(this,20);
+        body=new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); body.setBackgroundColor(UiStyles.PAPER); int pad=UiStyles.dp(this,18);
         body.setPadding(pad,pad,pad,pad);
         body.setOnApplyWindowInsetsListener((v,insets)->{ v.setPadding(pad+insets.getSystemWindowInsetLeft(),pad+insets.getSystemWindowInsetTop(),pad+insets.getSystemWindowInsetRight(),pad+insets.getSystemWindowInsetBottom()); return insets; });
         ScrollView scroll=new ScrollView(this); scroll.addView(body); setContentView(scroll); render();
@@ -47,7 +47,7 @@ public final class CategoriesActivity extends Activity {
         Button add=UiStyles.button(this,getString(R.string.category_add),true); add.setId(R.id.category_add); add.setEnabled(!job.busy); add.setOnClickListener(v->{ job.editing=true; job.editId=null; job.draft=""; job.message=""; edit(); }); body.addView(add,spacing());
         if(job.busy || !job.message.isEmpty()) { TextView status=UiStyles.text(this,job.busy?getString(R.string.categories_loading):job.message,14,UiStyles.MUTED); status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE); body.addView(status); }
         for(var category:job.categories) {
-            LinearLayout panel=column(); panel.setPadding(UiStyles.dp(this,16),UiStyles.dp(this,14),UiStyles.dp(this,16),UiStyles.dp(this,14)); panel.setBackground(UiStyles.surface(this,UiStyles.SURFACE,20,UiStyles.LINE));
+            LinearLayout panel=column(); panel.setPadding(UiStyles.dp(this,16),UiStyles.dp(this,14),UiStyles.dp(this,16),UiStyles.dp(this,14)); panel.setBackground(UiStyles.surface(this,UiStyles.SURFACE,14,UiStyles.LINE));
             LinearLayout heading=new LinearLayout(this); heading.setGravity(Gravity.CENTER_VERTICAL);
             TextView initial=UiStyles.text(this,category.name().isEmpty()?"K":category.name().substring(0,category.name().offsetByCodePoints(0,1)).toUpperCase(Locale.ROOT),20,UiStyles.ACCENT_TEXT); initial.setGravity(Gravity.CENTER); initial.setBackground(UiStyles.surface(this,UiStyles.SOFT,14,0)); heading.addView(initial,new LinearLayout.LayoutParams(UiStyles.dp(this,48),UiStyles.dp(this,48)));
             LinearLayout title=column(); title.setPadding(UiStyles.dp(this,14),0,0,0); title.addView(UiStyles.text(this,category.name(),18,UiStyles.INK));
@@ -62,7 +62,7 @@ public final class CategoriesActivity extends Activity {
     private String counts(SQLiteSavedItemRepository.CategorySummary category) { return getResources().getQuantityString(R.plurals.category_saved_count,category.saved(),category.saved())+(category.trashed()==0?"":getString(R.string.category_trash_count,category.trashed())); }
     private LinearLayout column() { LinearLayout view=new LinearLayout(this); view.setOrientation(LinearLayout.VERTICAL); return view; }
     private LinearLayout.LayoutParams spacing() { LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2); p.topMargin=UiStyles.dp(this,12); return p; }
-    private LinearLayout form() { LinearLayout form=column(); int pad=UiStyles.dp(this,20); form.setPadding(pad,pad,pad,pad); return form; }
+    private LinearLayout form() { LinearLayout form=column(); int pad=UiStyles.dp(this,18); form.setPadding(pad,pad,pad,pad); return form; }
     private void edit() {
         LinearLayout form=form(); form.addView(UiStyles.text(this,getString(R.string.category_name),14,UiStyles.MUTED));
         EditText name=new EditText(this); name.setId(R.id.category_name); name.setSingleLine(true); name.setText(job.draft); name.setSelectAllOnFocus(true); name.setContentDescription(getString(R.string.category_name)); form.addView(name);

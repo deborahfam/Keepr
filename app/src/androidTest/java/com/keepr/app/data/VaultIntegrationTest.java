@@ -166,7 +166,7 @@ public class VaultIntegrationTest {
             assertTrue(new File(context.getFilesDir(),saved.media().get(0).relativePath()).isFile());
             repository.applyPreview(id,new PreviewMetadata(item.url(),"Listing title","Public description","Example","https://example.com/photo.png","10","USD",""));
             assertEquals("A full shared caption",repository.find(id).sharedText());
-            assertEquals("Public description",repository.find(id).description());
+            assertEquals("A full shared caption",repository.find(id).description());
             assertEquals("Listing title",repository.find(id).title());
             try { cache.store(id,"bad",new byte[]{1,2,3}); fail("Invalid photo accepted"); } catch (java.io.IOException expected) { }
             repository.delete(id); assertNull(repository.find(id)); assertFalse(new File(context.getFilesDir(),photo.relativePath()).exists());

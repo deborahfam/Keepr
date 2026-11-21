@@ -1,0 +1,39 @@
+PENCIL / ANDROID — revisión en curso
+
+Referencia: keepr-redesign.pen, pantallas existentes conservadas.
+No se ha certificado igualdad visual completa.
+
+Implementado:
+- Inter y Funnel Sans incluidas con licencias OFL.
+- Tema Android con los colores del diseño.
+- Colección: tarjetas horizontales, miniaturas 112×132 y 82×92,
+  márgenes laterales 18, separación 12/10, texto compacto.
+- Menú de colección como panel inferior.
+- Detalle: galería antes de pestañas, acciones debajo del contenido,
+  descripción sin panel adicional y notas con superficie propia.
+- Guardado a pantalla completa.
+- Ajustes con gradiente del panel de actualizaciones.
+- Superficies y márgenes secundarios armonizados.
+
+Pencil ampliado con 12 vistas secundarias y 22 estados iniciales.
+Comprobación geométrica sin recortes. Diseños secundarios requieren
+refinamiento y comparación individual con Android.
+
+Pendiente para cumplir TODO el encargo:
+- Revisar cada diseño secundario; sustituir controles representados
+  como texto por componentes detallados (selectores, campos, checks).
+- Completar visor ampliado, documentos legales y estados de carga/error.
+- Aplicar exactamente cada composición secundaria y cada diálogo.
+- Unificar idioma y textos con las pantallas españolas de Pencil.
+- Sustituir glifos de botones por iconos equivalentes a Lucide.
+- Comparar capturas de TODAS las vistas con contenido sintético,
+  incluidos scroll, teclado, texto largo y escala de fuente aumentada.
+- Corregir diferencias restantes de peso tipográfico, altura y espaciado.
+
+Verificación realizada:
+- assembleDebug, assembleDebugAndroidTest, lintDebug y testDebugUnitTest.
+- Primera suite de dispositivo: 47/49; dos expectativas de descripción
+  actualizadas para conservar el texto más largo. Repetición: 10/10 pasaron.
+- Captura inicial de colección vacía en emulador.
+
+No publicar como paridad visual terminada.

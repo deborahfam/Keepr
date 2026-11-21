@@ -26,7 +26,7 @@ public final class BackupActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         job=(Job)getLastNonConfigurationInstance(); if(job==null) job=new Job(); job.screen=this;
-        LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); int pad=(int)(24*getResources().getDisplayMetrics().density); root.setPadding(pad,pad,pad,pad);
+        LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); int pad=(int)(18*getResources().getDisplayMetrics().density); root.setPadding(pad,pad,pad,pad);
         root.setOnApplyWindowInsetsListener((view,insets)->{ view.setPadding(pad+insets.getSystemWindowInsetLeft(),pad+insets.getSystemWindowInsetTop(),pad+insets.getSystemWindowInsetRight(),pad+insets.getSystemWindowInsetBottom()); return insets; });
         root.setBackgroundColor(UiStyles.PAPER);
         Button back=UiStyles.button(this,"‹  Back to collection",false); back.setOnClickListener(v->finish()); root.addView(back);
@@ -34,7 +34,7 @@ public final class BackupActivity extends Activity {
         heading.setPadding(0,pad,0,UiStyles.dp(this,8)); root.addView(heading);
         TextView explanation=UiStyles.text(this,getString(R.string.backup_explanation),15,UiStyles.MUTED); root.addView(explanation);
         LinearLayout panel=new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL); panel.setPadding(pad,pad,pad,pad);
-        panel.setBackground(UiStyles.surface(this,UiStyles.SURFACE,20,UiStyles.LINE));
+        panel.setBackground(UiStyles.surface(this,UiStyles.SURFACE,14,UiStyles.LINE));
         LinearLayout.LayoutParams panelParams=new LinearLayout.LayoutParams(-1,-2); panelParams.topMargin=pad; root.addView(panel,panelParams);
         panel.addView(UiStyles.text(this,"Keep a safe copy",20,UiStyles.INK));
         panel.addView(UiStyles.text(this,"Choose a location for your posts and saved photos.",14,UiStyles.MUTED));
@@ -50,7 +50,7 @@ public final class BackupActivity extends Activity {
         ScrollView scroll=new ScrollView(this); scroll.addView(root); setContentView(scroll); render();
     }
     private void password(boolean exporting,Runnable next) {
-        LinearLayout fields=new LinearLayout(this); fields.setOrientation(LinearLayout.VERTICAL); int pad=UiStyles.dp(this,20); fields.setPadding(pad,pad,pad,pad);
+        LinearLayout fields=new LinearLayout(this); fields.setOrientation(LinearLayout.VERTICAL); int pad=UiStyles.dp(this,18); fields.setPadding(pad,pad,pad,pad);
         TextView help=UiStyles.text(this,exporting?"Use at least 12 characters. Keep this password safely: it cannot be recovered.":"Enter the backup password. For an older unencrypted ZIP backup, leave this blank.",15,UiStyles.INK); fields.addView(help);
         EditText first=new EditText(this); first.setHint("Backup password"); first.setInputType(129); first.setSaveEnabled(false); first.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO); fields.addView(first);
         EditText confirm=new EditText(this); confirm.setHint("Confirm password"); confirm.setInputType(129); confirm.setSaveEnabled(false); confirm.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO); if(exporting) fields.addView(confirm);

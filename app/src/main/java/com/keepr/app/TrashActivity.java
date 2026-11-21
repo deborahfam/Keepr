@@ -14,7 +14,7 @@ public final class TrashActivity extends Activity {
     private boolean busy;
     @Override public void onCreate(Bundle state) {
         super.onCreate(state); repository=new SQLiteSavedItemRepository(this);
-        body=new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); int pad=(int)(20*getResources().getDisplayMetrics().density);
+        body=new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); int pad=(int)(18*getResources().getDisplayMetrics().density);
         body.setOnApplyWindowInsetsListener((v,insets)->{ v.setPadding(pad+insets.getSystemWindowInsetLeft(),pad+insets.getSystemWindowInsetTop(),pad+insets.getSystemWindowInsetRight(),pad+insets.getSystemWindowInsetBottom()); return insets; });
         body.setBackgroundColor(UiStyles.PAPER);
         ScrollView scroll=new ScrollView(this); scroll.setBackgroundColor(UiStyles.PAPER); scroll.addView(body); setContentView(scroll); reload();
@@ -34,7 +34,7 @@ public final class TrashActivity extends Activity {
                     for(var post:posts) {
                         LinearLayout card=new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
                         int space=UiStyles.dp(this,18); card.setPadding(space,space,space,space);
-                        card.setBackground(UiStyles.surface(this,UiStyles.SURFACE,20,UiStyles.LINE));
+                        card.setBackground(UiStyles.surface(this,UiStyles.SURFACE,14,UiStyles.LINE));
                         LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2); params.topMargin=UiStyles.dp(this,16);
                         body.addView(card,params); destination=card;
                         text(post.title(),20); text("Expires "+java.text.DateFormat.getDateTimeInstance().format(new java.util.Date(post.expiresAt())),14);

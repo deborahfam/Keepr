@@ -41,17 +41,19 @@ public final class SettingsActivity extends Activity {
         root.setOnApplyWindowInsetsListener((view,insets)->{
             view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom()); return insets;
         });
-        LinearLayout toolbar=new LinearLayout(this); toolbar.setGravity(android.view.Gravity.CENTER_VERTICAL); toolbar.setPadding(dp(20),dp(8),dp(20),dp(8));
+        LinearLayout toolbar=new LinearLayout(this); toolbar.setGravity(android.view.Gravity.CENTER_VERTICAL); toolbar.setPadding(dp(18),dp(8),dp(18),dp(8));
         Button back=UiStyles.button(this,"‹",false); back.setTextSize(26); back.setContentDescription("Back to collection"); back.setOnClickListener(v->finish());
         toolbar.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        TextView heading=UiStyles.text(this,"Settings",23,UiStyles.INK); heading.setPadding(dp(14),0,0,0); toolbar.addView(heading); root.addView(toolbar);
-        ScrollView scroll=new ScrollView(this); LinearLayout body=column(); body.setPadding(dp(20),dp(12),dp(20),dp(24)); scroll.addView(body);
+        TextView heading=UiStyles.text(this,"Settings",26,UiStyles.INK); heading.setPadding(dp(14),0,0,0); toolbar.addView(heading); root.addView(toolbar);
+        ScrollView scroll=new ScrollView(this); LinearLayout body=column(); body.setPadding(dp(18),dp(12),dp(18),dp(24)); scroll.addView(body);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
 
         LinearLayout updates=card(body);
+        android.graphics.drawable.GradientDrawable updateBackground=new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,new int[]{0xff3B151C,0xff171214,0xff111113});
+        updateBackground.setCornerRadius(dp(18)); updateBackground.setStroke(dp(1),0xff5D222C); updates.setBackground(updateBackground);
         TextView label=UiStyles.text(this,"KEEPR  /  UPDATES",12,UiStyles.ACCENT_TEXT); updates.addView(label);
-        updates.addView(UiStyles.text(this,"Keep Keepr up to date",24,UiStyles.INK));
-        updates.addView(UiStyles.text(this,"Installed version · "+installedVersion,14,UiStyles.MUTED));
+        updates.addView(UiStyles.text(this,"App updates",19,UiStyles.INK));
+        updates.addView(UiStyles.text(this,"Installed version · "+installedVersion,11,UiStyles.MUTED));
         latest=UiStyles.text(this,"",14,UiStyles.ACCENT_TEXT); updates.addView(latest);
         status=UiStyles.text(this,"",16,UiStyles.INK); status.setId(R.id.update_status); status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); updates.addView(status);
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal); progress.setIndeterminate(true); progress.setContentDescription("Checking for updates"); updates.addView(progress);
@@ -93,7 +95,7 @@ public final class SettingsActivity extends Activity {
             while((count=input.read(buffer))!=-1) bytes.write(buffer,0,count);
             String text=new String(bytes.toByteArray(),java.nio.charset.StandardCharsets.UTF_8);
             TextView content=UiStyles.text(this,text,15,UiStyles.INK); content.setTextIsSelectable(true);
-            content.setPadding(dp(20),dp(16),dp(20),dp(16));
+            content.setPadding(dp(18),dp(16),dp(18),dp(16));
             ScrollView scroll=new ScrollView(this); scroll.addView(content);
             new android.app.AlertDialog.Builder(this).setTitle(title).setView(scroll)
                     .setPositiveButton(android.R.string.ok,null).show();

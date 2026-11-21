@@ -59,8 +59,8 @@ public final class PostDetailActivity extends Activity {
         LinearLayout.LayoutParams titleParams=new LinearLayout.LayoutParams(0,-2,1); titleParams.leftMargin=dp(12); toolbar.addView(title,titleParams);
         root.addView(toolbar);
         tabs=new LinearLayout(this); tabs.setPadding(dp(4),dp(4),dp(4),dp(4)); tabs.setBackground(shape(UiStyles.SURFACE,18));
-        LinearLayout.LayoutParams tabLayout=new LinearLayout.LayoutParams(-1,-2); tabLayout.setMargins(dp(20),dp(4),dp(20),dp(8)); root.addView(tabs,tabLayout);
-        scroll=new ScrollView(this); body=column(); body.setPadding(dp(20),dp(8),dp(20),dp(24)); scroll.addView(body);
+        LinearLayout.LayoutParams tabLayout=new LinearLayout.LayoutParams(-1,-2); tabLayout.setMargins(dp(20),dp(4),dp(20),dp(8)); tabs.setLayoutParams(tabLayout);
+        scroll=new ScrollView(this); body=column(); body.setPadding(dp(18),dp(8),dp(18),dp(28)); scroll.addView(body);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         setContentView(root); renderTabs(); body.addView(text("Opening saved post…",16,muted));
         updates=WorkManager.getInstance(this).getWorkInfosByTagLiveData("keepr-snapshot");
@@ -102,23 +102,27 @@ public final class PostDetailActivity extends Activity {
     private void render() {
         if(item==null) return;
         body.removeAllViews();
+        if(tabs.getParent()!=null) ((android.view.ViewGroup)tabs.getParent()).removeView(tabs);
+        if(tab.equals("Post")) gallery();
+        body.addView(tabs);
         TextView category=text((item.categoryId()==null?"Other":item.categoryId())+"  ·  "+status(item.status()),12,accent); body.addView(category);
-        heading=text(PublicationText.clean(item.title()),25,ink); heading.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); body.addView(heading);
+        heading=text(PublicationText.clean(item.title()),24,ink); heading.setTypeface(getResources().getFont(R.font.funnel_sans)); body.addView(heading);
         if(tab.equals("Post")) {
             if(!item.price().isEmpty()) {
-                TextView price=text((item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod()),26,ink);
+                TextView price=text((item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod()),16,ink);
                 price.setTypeface(null,Typeface.BOLD); body.addView(price);
             }
+            listingDetails(); contactDetails();
+            section("Description",PublicationText.clean(item.description().isEmpty()?item.sharedText():item.description()));
+            section("My notes",item.notes());
+            if(!item.tags().isEmpty()) section("Tags","#"+String.join("  #",item.tags()));
             LinearLayout actions=new LinearLayout(this);
             Button edit=button("Edit post",true); edit.setOnClickListener(v->showEdit(null));
             Button statusButton=button("Change status",false); statusButton.setId(R.id.change_status); statusButton.setOnClickListener(v->showStatusPicker());
             LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,-2,1); half.rightMargin=dp(8); actions.addView(edit,half); actions.addView(statusButton,new LinearLayout.LayoutParams(0,-2,1)); body.addView(actions,block());
             Button share=button(getString(R.string.share_posts),false); share.setId(R.id.share_posts); share.setOnClickListener(v->SharePostsActivity.open(this,List.of(id))); body.addView(share,block());
-            if(!item.media().isEmpty()) { gallery(); }
-            listingDetails(); contactDetails();
-            section("Description",PublicationText.clean(item.description().isEmpty()?item.sharedText():item.description()));
-            section("My notes",item.notes());
-            if(!item.tags().isEmpty()) section("Tags","#"+String.join("  #",item.tags()));
+
+
         } else if(tab.equals("Photos")) {
             gallery(); section("Photo downloads",captureSummary());
             body.addView(text("Downloaded photos work offline. Tap a photo to zoom.",13,muted));
@@ -300,7 +304,7 @@ public final class PostDetailActivity extends Activity {
         photo.setBackground(shape(UiStyles.SOFT,20)); photo.setClipToOutline(true);
         photo.setContentDescription(getString(R.string.gallery_position,photoIndex+1,item.media().size()));
         photo.setOnClickListener(v->showPhoto());
-        body.addView(photo,new LinearLayout.LayoutParams(-1,dp(210))); load(photo,media,1000);
+        body.addView(photo,new LinearLayout.LayoutParams(-1,dp(230))); load(photo,media,1000);
         GestureDetector gestures=new GestureDetector(this,new GestureDetector.SimpleOnGestureListener(){
             @Override public boolean onDown(MotionEvent e) { return true; }
             @Override public boolean onSingleTapUp(MotionEvent e) { photo.performClick(); return true; }
@@ -369,11 +373,13 @@ public final class PostDetailActivity extends Activity {
     }
     private void section(String name,String value) {
         if(value==null || value.isEmpty()) return;
-        LinearLayout panel=panel(name); TextView content=text(value,15,ink); content.setTextIsSelectable(true); content.setLineSpacing(dp(3),1); panel.addView(content);
+        LinearLayout panel=column();
+        if(name.equals("My notes")) { panel.setPadding(dp(14),dp(14),dp(14),dp(14)); panel.setBackground(shape(UiStyles.SURFACE,14)); }
+        panel.addView(text(name,11,muted)); TextView content=text(value,13,ink); content.setTextIsSelectable(true); content.setLineSpacing(dp(3),1); panel.addView(content); body.addView(panel,block());
     }
     private String status(SavedItem.Status status) { return StatusLabels.label(this,status); }
     private LinearLayout column() { LinearLayout result=new LinearLayout(this); result.setOrientation(LinearLayout.VERTICAL); return result; }
-    private TextView text(String value,int size,int color) { TextView view=new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(color); view.setPadding(0,dp(6),0,dp(6)); return view; }
+    private TextView text(String value,int size,int color) { TextView view=new TextView(this); view.setText(value); view.setTextSize(size); view.setTextColor(color); view.setTypeface(getResources().getFont(R.font.inter)); view.setIncludeFontPadding(false); view.setPadding(0,dp(4),0,dp(4)); return view; }
     private GradientDrawable shape(int color,int radius) { GradientDrawable drawable=new GradientDrawable(); drawable.setColor(color); drawable.setCornerRadius(dp(radius)); return drawable; }
     private Button button(String text,boolean primary) {
         return UiStyles.button(this,text,primary);

@@ -37,7 +37,7 @@ public class VaultBackupTest {
             assertEquals(1,restored.added()); assertEquals(0,restored.skipped());
             SavedItem actual=to.find(id); assertEquals("My chosen title",actual.title()); assertEquals("Updated notes",actual.notes()); assertEquals("New folder",actual.categoryId());
             assertEquals(Set.of("home","favorites"),new HashSet<>(actual.tags())); assertEquals("Original caption",actual.sharedText());
-            assertEquals("Caption",actual.description()); assertEquals(100,actual.createdAt()); assertEquals(SavedItem.Status.REACHED_OUT,actual.status());
+            assertEquals("Original caption",actual.description()); assertEquals(100,actual.createdAt()); assertEquals(SavedItem.Status.REACHED_OUT,actual.status());
             assertEquals(1,actual.media().size()); assertEquals(photo.sha256(),actual.media().get(0).sha256());
             assertTrue(new File(context.getFilesDir(),actual.media().get(0).relativePath()).isFile());
             assertEquals(1,to.photoProgress(id).pending()); assertEquals(1,to.photoProgress(id).saved());

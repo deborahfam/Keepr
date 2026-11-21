@@ -26,11 +26,11 @@ final class UiStyles {
     }
     static Button button(Context context, String label, boolean primary) {
         Button button = new Button(context); button.setText(label); button.setAllCaps(false);
-        button.setTextSize(14); button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        button.setTextSize(14); button.setTypeface(context.getResources().getFont(com.keepr.app.R.font.inter));
         button.setTextColor(new ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{}},
                 new int[]{primary ? 0xffC2A8AE : 0xff958990, primary ? 0xffffffff : ACCENT_TEXT}));
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33FF98A5),
-                surface(context, primary ? ACCENT : SURFACE, 16, primary ? 0 : LINE), surface(context, 0xffffffff, 18, 0)));
+                surface(context, primary ? ACCENT : SURFACE, 14, primary ? 0 : LINE), surface(context, 0xffffffff, 18, 0)));
         button.setPadding(dp(context, 14), dp(context, 10), dp(context, 14), dp(context, 10));
         button.setMinWidth(0); button.setMinimumWidth(0);
         button.setMinHeight(dp(context, 48)); button.setMinimumHeight(dp(context, 48));
@@ -50,8 +50,8 @@ final class UiStyles {
     }
     static TextView text(Context context, String value, int size, int color) {
         TextView text = new TextView(context); text.setText(value); text.setTextSize(size); text.setTextColor(color);
-        text.setLineSpacing(dp(context, 3), 1); text.setPadding(0, dp(context, 6), 0, dp(context, 6));
-        if (size >= 20) text.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        text.setTypeface(context.getResources().getFont(com.keepr.app.R.font.inter)); text.setIncludeFontPadding(false); text.setLineSpacing(dp(context, 3), 1); text.setPadding(0, dp(context, 6), 0, dp(context, 6));
+        if (size >= 20) text.setTypeface(context.getResources().getFont(com.keepr.app.R.font.funnel_sans));
         return text;
     }
 }

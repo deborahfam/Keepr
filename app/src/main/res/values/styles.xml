@@ -1,13 +1,21 @@
 <resources>
     <style name="Theme.Keepr" parent="android:style/Theme.Material.NoActionBar">
-        <item name="android:colorBackground">#0D0D11</item>
-        <item name="android:textColorPrimary">#F5F3F4</item>
-        <item name="android:textColorSecondary">#B2ADB4</item>
-        <item name="android:fontFamily">sans</item>
+        <item name="android:colorBackground">#09090B</item>
+        <item name="android:textColorPrimary">#F7F3F4</item>
+        <item name="android:textColorSecondary">#A7A0A3</item>
+        <item name="android:alertDialogTheme">@style/Theme.Keepr.Dialog</item>
+        <item name="android:fontFamily">@font/inter</item>
         <item name="android:colorAccent">#FF98A5</item>
-        <item name="android:colorControlNormal">#B2ADB4</item>
+        <item name="android:colorControlNormal">#A7A0A3</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:navigationBarColor">#0D0D11</item>
-        <item name="android:windowBackground">#0D0D11</item>
+        <item name="android:navigationBarColor">#09090B</item>
+        <item name="android:windowBackground">#09090B</item>
+    </style>
+    <style name="Theme.Keepr.Dialog" parent="android:style/Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_surface</item>
+        <item name="android:colorAccent">#F04444</item>
+        <item name="android:textColorPrimary">#F7F3F4</item>
+        <item name="android:textColorSecondary">#A7A0A3</item>
+        <item name="android:fontFamily">@font/inter</item>
     </style>
 </resources>

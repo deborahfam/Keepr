@@ -31,7 +31,7 @@ public final class ImportPostsActivity extends Activity {
             job=new Job();
             if(state!=null) { job.uri=state.getString("uri"); job.done=state.getBoolean("done"); job.message=state.getString("message",""); job.keepExisting=state.getBoolean("keep",true); }
         }
-        job.screen=this; body=new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); int pad=UiStyles.dp(this,20);
+        job.screen=this; body=new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); int pad=UiStyles.dp(this,18);
         body.setPadding(pad,pad,pad,pad); body.setBackgroundColor(UiStyles.PAPER);
         body.setOnApplyWindowInsetsListener((v,insets)->{ v.setPadding(pad+insets.getSystemWindowInsetLeft(),pad+insets.getSystemWindowInsetTop(),pad+insets.getSystemWindowInsetRight(),pad+insets.getSystemWindowInsetBottom()); return insets; });
         ScrollView scroll=new ScrollView(this); scroll.addView(body); setContentView(scroll); render();
