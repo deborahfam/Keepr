@@ -49,6 +49,21 @@ final class UiStyles {
         android.widget.LinearLayout.LayoutParams label=new android.widget.LinearLayout.LayoutParams(0,-2,1); label.leftMargin=dp(activity,14);
         row.addView(heading,label); return row;
     }
+    static android.widget.LinearLayout menuRow(Context context,String title,String description,int icon,boolean highlighted,Runnable action) {
+        android.widget.LinearLayout row=new android.widget.LinearLayout(context);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL); row.setPadding(dp(context,14),dp(context,13),dp(context,14),dp(context,13));
+        row.setBackground(new RippleDrawable(ColorStateList.valueOf(0x22FFFFFF),surface(context,highlighted?SOFT:SURFACE,highlighted?14:12,highlighted?0xff61242E:0),null));
+        android.widget.ImageView symbol=new android.widget.ImageView(context); symbol.setImageResource(icon);
+        symbol.setPadding(dp(context,8),dp(context,8),dp(context,8),dp(context,8));
+        symbol.setBackground(surface(context,highlighted?ACCENT:0xff1B1B1F,10,0));
+        row.addView(symbol,new android.widget.LinearLayout.LayoutParams(dp(context,highlighted?38:34),dp(context,highlighted?38:34)));
+        android.widget.LinearLayout copy=new android.widget.LinearLayout(context); copy.setOrientation(android.widget.LinearLayout.VERTICAL);
+        TextView name=text(context,title,14,INK); name.setPadding(0,0,0,dp(context,2)); copy.addView(name);
+        TextView hint=text(context,description,11,highlighted?0xffDFA5AC:MUTED); hint.setPadding(0,0,0,0); copy.addView(hint);
+        android.widget.LinearLayout.LayoutParams details=new android.widget.LinearLayout.LayoutParams(0,-2,1); details.leftMargin=dp(context,12); details.rightMargin=dp(context,12); row.addView(copy,details);
+        android.widget.ImageView chevron=new android.widget.ImageView(context); chevron.setImageResource(R.drawable.ic_back); chevron.setRotation(180); chevron.setImageTintList(ColorStateList.valueOf(0xff706A6D)); row.addView(chevron,new android.widget.LinearLayout.LayoutParams(dp(context,18),dp(context,18)));
+        row.setMinimumHeight(dp(context,60)); row.setFocusable(true); row.setOnClickListener(v->action.run()); return row;
+    }
     static void field(android.widget.EditText field) {
         Context context=field.getContext();
         field.setTextSize(14); field.setTextColor(INK); field.setHintTextColor(MUTED);

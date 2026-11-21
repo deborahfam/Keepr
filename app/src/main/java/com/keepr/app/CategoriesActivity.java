@@ -33,7 +33,7 @@ public final class CategoriesActivity extends Activity {
         job.screen=this;
         body=new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); body.setBackgroundColor(UiStyles.PAPER); int pad=UiStyles.dp(this,18);
         body.setPadding(pad,pad,pad,pad);
-        body.setOnApplyWindowInsetsListener((v,insets)->{ v.setPadding(pad+insets.getSystemWindowInsetLeft(),pad+insets.getSystemWindowInsetTop(),pad+insets.getSystemWindowInsetRight(),pad+insets.getSystemWindowInsetBottom()); return insets; });
+        body.setOnApplyWindowInsetsListener((v,insets)->{ v.setPadding(pad+insets.getSystemWindowInsetLeft(),UiStyles.dp(this,8)+insets.getSystemWindowInsetTop(),pad+insets.getSystemWindowInsetRight(),pad+insets.getSystemWindowInsetBottom()); return insets; });
         ScrollView scroll=new ScrollView(this); scroll.addView(body); setContentView(scroll); render();
         if(fresh) run(null);
     }
@@ -41,7 +41,7 @@ public final class CategoriesActivity extends Activity {
         if(dialog!=null) { dialog.dismiss(); dialog=null; }
         body.removeAllViews();
         body.addView(UiStyles.header(this,getString(R.string.categories_title),this::finish));
-        body.addView(UiStyles.text(this,getString(R.string.categories_description),15,UiStyles.MUTED));
+        body.addView(UiStyles.text(this,getString(R.string.categories_description),12,UiStyles.MUTED));
         Button add=UiStyles.button(this,getString(R.string.category_add),true); add.setId(R.id.category_add); add.setEnabled(!job.busy); add.setOnClickListener(v->{ job.editing=true; job.editId=null; job.draft=""; job.message=""; edit(); }); body.addView(add,spacing());
         if(job.busy || !job.message.isEmpty()) { TextView status=UiStyles.text(this,job.busy?getString(R.string.categories_loading):job.message,14,UiStyles.MUTED); status.setAccessibilityLiveRegion(android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE); body.addView(status); }
         for(var category:job.categories) {

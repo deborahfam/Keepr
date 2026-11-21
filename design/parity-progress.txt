@@ -48,3 +48,21 @@ Continuación:
 - Build, lint y pruebas JVM pasaron tras estos cambios.
 - Bloqueo actual del diseño: MCP no tiene documento abierto; CLI 0.3.2
   rechaza formato 2.25. Se intenta instalar CLI 0.3.17 en /tmp.
+
+Pencil reconectado:
+- Categorías: controles de tarjeta separados, cabecera detallada y campos
+  de crear/renombrar refinados. Capturas de diseño revisadas sin recortes.
+- Android: margen superior de categorías 8 dp y subtítulo 12 sp.
+- Traducción española completa sigue pendiente; se descartó un locale
+  parcial porque lint detectó traducciones faltantes.
+- No se ha certificado paridad de los diálogos Android con estos diseños.
+
+Menú y ajustes:
+- Menú con filas de icono, título, subtítulo y chevron, cierre explícito,
+  entrada Ajustes destacada y desplazamiento para pantallas pequeñas.
+- Ajustes comparte filas para copias/papelera y nota de conexión voluntaria.
+- Pencil: texto de copias corregido a cifrado; añadido acceso de importar.
+- Build/lint/JVM y pruebas SettingsTest/VisualScreensTest pasaron.
+- Captura de Ajustes inspeccionada: aún faltan resumen de almacenamiento,
+  separación de Acerca de, idioma, iconos de actualización y ajuste fino.
+- No certificar paridad global: el inventario restante sigue pendiente.

@@ -22,7 +22,7 @@ public final class SettingsActivity extends Activity {
 
     private static final class CheckJob {
         volatile boolean checking;
-        volatile String message="Check GitHub for the latest version of Keepr.";
+        volatile String message="";
         volatile AppUpdates.Release release;
         volatile long checkedAt;
         volatile SettingsActivity screen;
@@ -49,9 +49,12 @@ public final class SettingsActivity extends Activity {
         LinearLayout updates=card(body);
         android.graphics.drawable.GradientDrawable updateBackground=new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,new int[]{0xff3B151C,0xff171214,0xff111113});
         updateBackground.setCornerRadius(dp(18)); updateBackground.setStroke(dp(1),0xff5D222C); updates.setBackground(updateBackground);
-        TextView label=UiStyles.text(this,"KEEPR  /  UPDATES",12,UiStyles.ACCENT_TEXT); updates.addView(label);
+
         updates.addView(UiStyles.text(this,"App updates",19,UiStyles.INK));
-        updates.addView(UiStyles.text(this,"Installed version · "+installedVersion,11,UiStyles.MUTED));
+        updates.addView(UiStyles.text(this,"Installed version · "+installedVersion,11,0xffDFA5AC));
+        updates.addView(UiStyles.text(this,"Check the latest public version and download its APK directly from GitHub Releases.",13,UiStyles.MUTED));
+        TextView privacyNote=UiStyles.text(this,"Connects only when you ask",11,0xffB9DCC8);
+        privacyNote.setPadding(dp(11),dp(10),dp(11),dp(10)); privacyNote.setBackground(UiStyles.surface(this,0xaa120F10,10,0)); updates.addView(privacyNote);
         latest=UiStyles.text(this,"",14,UiStyles.ACCENT_TEXT); updates.addView(latest);
         status=UiStyles.text(this,"",16,UiStyles.INK); status.setId(R.id.update_status); status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); updates.addView(status);
         progress=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal); progress.setIndeterminate(true); progress.setContentDescription("Checking for updates"); updates.addView(progress);
@@ -63,10 +66,10 @@ public final class SettingsActivity extends Activity {
         releases.setOnClickListener(v->openWeb(job.release==null?AppUpdates.RELEASES:job.release.pageUrl()));
         updates.addView(UiStyles.text(this,"Download the APK from GitHub, then open it to install. Compatible updates keep your saved posts and photos.",13,UiStyles.MUTED));
 
-        LinearLayout data=card(body); data.addView(UiStyles.text(this,"Your data",21,UiStyles.INK));
-        data.addView(UiStyles.text(this,"Your collection is stored on this device. Preview downloads contact source websites; exports go to the destination you choose. Keep a backup before changing phones or reinstalling.",14,UiStyles.MUTED));
-        Button backup=UiStyles.button(this,getString(R.string.backup_restore),false); addButton(data,backup); backup.setOnClickListener(v->startActivity(new Intent(this,BackupActivity.class)));
-        Button trash=UiStyles.button(this,"Trash",false); addButton(data,trash); trash.setOnClickListener(v->startActivity(new Intent(this,TrashActivity.class)));
+        body.addView(UiStyles.text(this,"DATA AND SECURITY",10,0xff706A6D));
+        LinearLayout data=card(body); data.setPadding(dp(8),dp(6),dp(8),dp(6));
+        data.addView(UiStyles.menuRow(this,"Backup and restore","Password-encrypted copies",R.drawable.ic_backup,false,()->startActivity(new Intent(this,BackupActivity.class))));
+        data.addView(UiStyles.menuRow(this,"Trash","Restore deleted posts before expiry",R.drawable.ic_trash,false,()->startActivity(new Intent(this,TrashActivity.class))));
         Button privacy=UiStyles.button(this,"Privacy policy",false); addButton(data,privacy);
         privacy.setOnClickListener(v->showDocument("Keepr privacy policy",R.raw.privacy));
         Button onlinePrivacy=UiStyles.button(this,"Privacy policy online",false); addButton(data,onlinePrivacy);
@@ -118,7 +121,7 @@ public final class SettingsActivity extends Activity {
         });
     }
     private void render() {
-        status.setText(job.message); check.setEnabled(!job.checking); check.setText(job.checking?"Checking…":"Check for updates");
+        status.setText(job.message); status.setVisibility(job.message.isEmpty()?View.GONE:View.VISIBLE); check.setEnabled(!job.checking); check.setText(job.checking?"Checking…":"Check for updates");
         progress.setVisibility(job.checking?View.VISIBLE:View.GONE);
         AppUpdates.Release release=job.release;
         latest.setVisibility(release==null?View.GONE:View.VISIBLE);
