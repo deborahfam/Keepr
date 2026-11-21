@@ -4,6 +4,10 @@ import java.util.regex.*;
 
 /** Removes social hashtags without altering URL fragments, C#, or manually assigned tags. */
 public final class PublicationText {
+    public static String complete(String current,String candidate) {
+        String old=clean(current), next=clean(candidate);
+        return next.length()>old.length()?next:old;
+    }
     private static final Pattern URL=Pattern.compile("(?i)https?://[^\\s<>]+");
     private static final Pattern HASHTAG=Pattern.compile("(?<![\\p{L}\\p{N}_])#[\\p{L}\\p{N}_]+");
     private PublicationText() {}

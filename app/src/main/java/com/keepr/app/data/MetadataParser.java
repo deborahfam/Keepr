@@ -55,7 +55,7 @@ public final class MetadataParser {
         if(productType.isEmpty()) productType=inferred.productType();
         boolean structuredFields=!structured.price.isEmpty() || !structured.location.isEmpty() || !structured.productType.isEmpty() || !first(meta,"product:price:amount","og:price:amount","price").isEmpty();
         String source=structuredFields?"Public page data; missing fields suggested from text. Review before relying on them.":"Suggested from publication text. Review before relying on these details.";
-        return new PreviewMetadata(url, limit(title, 1000), limit(description,65536),
+        return new PreviewMetadata(url, limit(title, 1000), description,
                 limit(first(meta, "og:site_name", "application-name"), 500), image,
                 limit(price,100), limit(currency,20),
                 limit(first(meta, "contact", "contact:email", "og:email", "email", "telephone"), 1000), java.util.Collections.unmodifiableList(new java.util.ArrayList<>(images)),Math.max(facebook.expected,images.size()),

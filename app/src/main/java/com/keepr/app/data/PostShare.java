@@ -98,7 +98,7 @@ public final class PostShare {
                     if(expected.put(name,photo)!=null || expected.size()>MAX_PHOTOS) throw new IOException("Repeated photo or too many photos.");
                     total+=size; if(total>MAX_BYTES) throw new IOException("Sharing file exceeds 256 MiB."); photos.add(photo);
                 }
-                posts.add(new Post(url,string(row,"title",65536),string(row,"description",65536),string(row,"price",128),string(row,"currency",32),string(row,"period",100),string(row,"location",1000),string(row,"productType",1000),string(row,"notes",65536),contacts,List.copyOf(photos)));
+                posts.add(new Post(url,string(row,"title",65536),string(row,"description",MAX_MANIFEST),string(row,"price",128),string(row,"currency",32),string(row,"period",100),string(row,"location",1000),string(row,"productType",1000),string(row,"notes",65536),contacts,List.copyOf(photos)));
             }
             Set<String> seen=new HashSet<>(); ZipEntry entry;
             while((entry=zip.getNextEntry())!=null) {

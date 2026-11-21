@@ -39,11 +39,11 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
     }
     private List<SavedItem> queryRows(SQLiteDatabase db,String where,String[] args,String order,String limit) {
         List<SavedItem> items=new ArrayList<>();
-        try(Cursor c=db.rawQuery("SELECT id,url,title,description,site_name,image_url,price,currency,contact,notes,(SELECT name FROM Category WHERE id=SavedItem.category_id),status,preview_state,preview_error,created_at,updated_at,shared_text,expected_photos,(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='PENDING'),(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='FAILED'),location,product_type,price_period,metadata_source,contact_name,contact_phone,contact_email,contact_whatsapp,contact_source FROM SavedItem WHERE "+where+" ORDER BY "+order+limit,args)) {
-            while (c.moveToNext()) items.add(new SavedItem(c.getString(0), c.getString(1), c.getString(2), c.getString(3),
+        try(Cursor c=db.rawQuery("SELECT id,url,title,substr(description,1,16384),site_name,image_url,price,currency,contact,notes,(SELECT name FROM Category WHERE id=SavedItem.category_id),status,preview_state,preview_error,created_at,updated_at,substr(shared_text,1,16384),expected_photos,(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='PENDING'),(SELECT COUNT(*) FROM MediaDownload WHERE saved_item_id=SavedItem.id AND state='FAILED'),location,product_type,price_period,metadata_source,contact_name,contact_phone,contact_email,contact_whatsapp,contact_source FROM SavedItem WHERE "+where+" ORDER BY "+order+limit,args)) {
+            while (c.moveToNext()) items.add(new SavedItem(c.getString(0), c.getString(1), c.getString(2), DatabaseText.read(db,c.getString(0),"description",c.getString(3)),
                     c.getString(4), c.getString(5), c.getString(6), c.getString(7), c.getString(8), c.getString(9),
                     c.getString(10), SavedItem.Status.valueOf(c.getString(11)), SavedItem.PreviewState.valueOf(c.getString(12)),
-                    c.getString(13), c.getLong(14), c.getLong(15), c.getString(16), tags(db, c.getString(0)), media(db, c.getString(0)),c.getInt(17),c.getInt(18),c.getInt(19),c.getString(20),c.getString(21),c.getString(22),c.getString(23),new ContactDetails(c.getString(24),c.getString(25),c.getString(26),c.getString(27),c.getString(28))));
+                    c.getString(13), c.getLong(14), c.getLong(15), DatabaseText.read(db,c.getString(0),"shared_text",c.getString(16)), tags(db, c.getString(0)), media(db, c.getString(0)),c.getInt(17),c.getInt(18),c.getInt(19),c.getString(20),c.getString(21),c.getString(22),c.getString(23),new ContactDetails(c.getString(24),c.getString(25),c.getString(26),c.getString(27),c.getString(28))));
         }
         return Collections.unmodifiableList(items);
     }
@@ -456,7 +456,8 @@ public final class SQLiteSavedItemRepository implements SavedItemRepository {
             ContentValues title=new ContentValues(); title.put("title",preview.title());
             helper.getWritableDatabase().update("SavedItem",title,"id=? AND title_edited=0 AND title=?",new String[]{id,item.title()});
         }
-        if (!preview.description().isEmpty() && (item.description().isEmpty() || item.description().equals(item.sharedText()))) v.put("description", PublicationText.clean(preview.description()));
+        String complete=PublicationText.complete(PublicationText.complete(item.description(),item.sharedText()),preview.description());
+        if(!complete.equals(item.description())) v.put("description",complete);
         v.put("expected_photos",preview.expectedPhotoCount()); v.put("image_url",preview.imageUrl()); v.put("site_name",preview.siteName());
         ContentValues facts=new ContentValues();
         if(!preview.price().isEmpty()) { facts.put("price",preview.price()); facts.put("currency",preview.currency()); facts.put("price_period",preview.pricePeriod()); }

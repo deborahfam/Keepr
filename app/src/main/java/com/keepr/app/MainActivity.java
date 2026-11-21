@@ -228,8 +228,6 @@ public final class MainActivity extends Activity {
         collectionSummary = label("Opening your collection…", 12, muted); identity.addView(collectionSummary);
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1); nameParams.leftMargin = dp(12);
         brand.addView(identity, nameParams);
-        Button quickSave=button("＋",true); quickSave.setTextSize(24); quickSave.setContentDescription("Save new post"); quickSave.setOnClickListener(v->showEditor(""));
-        LinearLayout.LayoutParams saveParams=new LinearLayout.LayoutParams(dp(48),dp(48)); saveParams.rightMargin=dp(8); brand.addView(quickSave,saveParams);
         Button menuButton = button("⋯", false); menuButton.setTextSize(24);
         menuButton.setContentDescription("Collection options");
         menuButton.setBackground(interactive(UiStyles.SURFACE, 16, line));
@@ -253,6 +251,10 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this); collectionScroll=scroll; scroll.setFillViewport(true); scroll.setClipToPadding(false);
         LinearLayout content = column(); content.setPadding(dp(20), 0, dp(20), dp(24));
         scroll.addView(content); root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        Button quickSave=button("＋  Save new publication",true);
+        quickSave.setOnClickListener(v->showEditor(""));
+        LinearLayout.LayoutParams saveParams=new LinearLayout.LayoutParams(-1,dp(48));
+        saveParams.bottomMargin=dp(16); content.addView(quickSave,saveParams);
         LinearLayout searchRow = new LinearLayout(this); searchRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
         searchRow.setBackground(surface(UiStyles.SURFACE, 16, line));
         search = new EditText(this); search.setSingleLine(true);
@@ -306,7 +308,7 @@ public final class MainActivity extends Activity {
         collectionHeading.setGravity(android.view.Gravity.CENTER_VERTICAL);
         collectionHeading.setPadding(0, dp(14), 0, dp(14));
         LinearLayout collectionTitle=column();
-        TextView savedHeading=label("Saved for later",23,ink); savedHeading.setTypeface(null,Typeface.BOLD); collectionTitle.addView(savedHeading);
+        TextView savedHeading=label("Your saved posts",20,ink); savedHeading.setTypeface(null,Typeface.BOLD); collectionTitle.addView(savedHeading);
         count = label("", 12, muted); collectionTitle.addView(count);
         collectionHeading.addView(collectionTitle, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout viewChoices = new LinearLayout(this);
@@ -439,8 +441,8 @@ public final class MainActivity extends Activity {
         LinearLayout top=new LinearLayout(this); top.setGravity(android.view.Gravity.CENTER_VERTICAL);
         TextView source=label(folder,12,UiStyles.ACCENT_TEXT); source.setMaxLines(1); source.setEllipsize(android.text.TextUtils.TruncateAt.END);
         top.addView(source,new LinearLayout.LayoutParams(0,-2,1)); top.addView(itemMenu(item),new LinearLayout.LayoutParams(dp(48),dp(48))); info.addView(top);
-        TextView title=itemTitle(item,listView?16:21); title.setPadding(0,0,0,dp(6)); info.addView(title);
-        if(!item.price().isEmpty()) { TextView price=label((item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod()),listView?15:20,ink); price.setTypeface(null,Typeface.BOLD); info.addView(price); }
+        TextView title=itemTitle(item,listView?14:17); title.setPadding(0,0,0,dp(6)); info.addView(title);
+        if(!item.price().isEmpty()) { TextView price=label((item.currency()+" "+item.price()).trim()+(item.pricePeriod().isEmpty()?"":" / "+item.pricePeriod()),listView?12:13,ink); price.setTypeface(null,Typeface.BOLD); info.addView(price); }
         if(!item.location().isEmpty()) { TextView location=label(item.location(),13,muted); location.setMaxLines(1); location.setEllipsize(android.text.TextUtils.TruncateAt.END); info.addView(location); }
         TextView status=label(StatusLabels.label(this,item.status()),12,item.status()==SavedItem.Status.ACTIVE?0xff9CD3B8:muted); info.addView(status);
         TextView capture=label(item.captureSummary(),12,muted); capture.setMaxLines(2); capture.setEllipsize(android.text.TextUtils.TruncateAt.END); info.addView(capture);
@@ -532,7 +534,7 @@ public final class MainActivity extends Activity {
                         if (!url.getText().toString().trim().equals(requested)) return;
                         preview[0]=result;
                         if (title.getText().toString().trim().isEmpty()) title.setText(result.title());
-                        if (text.getText().toString().equals(originalText) && (originalText.isEmpty() || originalText.equals(sharedText)) && !result.description().isEmpty()) text.setText(result.description());
+                        if (text.getText().toString().equals(originalText) && (originalText.isEmpty() || originalText.equals(sharedText)) && !result.description().isEmpty()) text.setText(com.keepr.app.data.PublicationText.complete(originalText,result.description()));
                         previewStatus.setText(getString(R.string.preview_photo_count,result.imageUrls().size()));
                     });
                 } catch (Exception e) { runOnUiThread(() -> {
@@ -709,7 +711,7 @@ public final class MainActivity extends Activity {
                 if (text.isEmpty() && clip.getText()!=null) text=clip.getText().toString();
             }
         } catch (RuntimeException e) { Toast.makeText(this,"Some shared content could not be read",Toast.LENGTH_LONG).show(); }
-        text=text.substring(0,Math.min(65536,text.length()));
+        // Preserve the complete text supplied by Android; never silently truncate a caption.
         List<String> urls=UrlExtractor.extract(text);
         String sharedText=com.keepr.app.data.PublicationText.clean(text); ArrayList<Uri> images=attachments;
         if (urls.isEmpty()) showEditor("",sharedText,images,false);

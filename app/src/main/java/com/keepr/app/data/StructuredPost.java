@@ -61,7 +61,8 @@ final class StructuredPost {
             boolean post=type.matches("(?i).*(Article|Posting|Product|Listing|WebPage).*");
             if (post) {
                 if (title.isEmpty()) title=node.optString("headline",node.optString("name",""));
-                String body=node.optString("articleBody",node.optString("text",node.optString("description","")));
+                String body="";
+                for(String field:new String[]{"articleBody","text","description"}) body=PublicationText.complete(body,node.optString(field,""));
                 if (body.length()>text.length()) text=body;
                 image(node.opt("image"),url,0);
                 image(node.opt("thumbnailUrl"),url,0);

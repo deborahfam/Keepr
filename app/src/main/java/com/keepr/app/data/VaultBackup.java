@@ -26,10 +26,16 @@ public final class VaultBackup {
             JSONObject manifest=new JSONObject(); manifest.put("format","keepr"); manifest.put("version",4);
             for(String table:TABLES) {
                 JSONArray rows=new JSONArray();
-                try(Cursor c=db.query(table,null,null,null,null,null,null)) {
+                String[] projection=null;
+                if(table.equals("SavedItem")) {
+                    try(Cursor columns=db.rawQuery("SELECT * FROM SavedItem LIMIT 0",null)) { projection=columns.getColumnNames(); }
+                    for(int i=0;i<projection.length;i++) projection[i]=DatabaseText.projection(projection[i]);
+                }
+                try(Cursor c=db.query(table,projection,null,null,null,null,null)) {
                     while(c.moveToNext()) {
                         JSONObject row=new JSONObject();
                         for(int i=0;i<c.getColumnCount();i++) row.put(c.getColumnName(i),c.isNull(i)?JSONObject.NULL:c.getType(i)==Cursor.FIELD_TYPE_INTEGER?c.getLong(i):c.getString(i));
+                        if(table.equals("SavedItem")) for(String field:new String[]{"description","shared_text"}) row.put(field,DatabaseText.read(db,row.getString("id"),field,row.getString(field)));
                         rows.put(row);
                     }
                 }

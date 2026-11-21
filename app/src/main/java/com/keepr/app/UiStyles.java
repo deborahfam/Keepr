@@ -10,10 +10,10 @@ import android.widget.TextView;
 
 /** Shared, accessible native controls for Keepr's screens. */
 final class UiStyles {
-    static final int INK = 0xffF5F3F4, MUTED = 0xffB2ADB4, ACCENT = 0xffE53940;
-    static final int ACCENT_TEXT = 0xffFF98A5, SURFACE = 0xff19191E;
-    static final int SOFT = 0xff3B191F, PEACH = 0xff493139;
-    static final int PAPER = 0xff0D0D11, LINE = 0xff34343B;
+    static final int INK = 0xffF7F3F4, MUTED = 0xffA7A0A3, ACCENT = 0xffF04444;
+    static final int ACCENT_TEXT = 0xffFF98A5, SURFACE = 0xff131316;
+    static final int SOFT = 0xff3A171D, PEACH = 0xff493139;
+    static final int PAPER = 0xff09090B, LINE = 0xff302C2E;
     private UiStyles() { }
     static int dp(Context context, int value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
